@@ -457,6 +457,46 @@
             margin-top: 1.5rem;
         }
 
+        .password-settings {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .password-settings.hidden {
+            display: none;
+        }
+
+        .password-settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .password-settings-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .password-settings-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .password-settings-fullwidth {
+            grid-column: 1 / -1;
+        }
+
+        .password-settings-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
         @media (max-width: 768px) {
             .entries-grid {
                 grid-template-columns: 1fr;
@@ -473,6 +513,10 @@
             
             .confirmation-buttons {
                 flex-direction: column;
+            }
+            
+            .password-settings-content {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -510,7 +554,6 @@
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-primary" id="addEntryBtn">Add Entry</button>
-                        <button class="btn btn-success" id="generatePasswordBtn">Generate Password</button>
                         <div style="position: relative;">
                             <button class="btn btn-warning" id="importExportBtn">Import/Export</button>
                             <div class="dropdown-menu" id="importExportMenu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-secondary); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 0.5rem; min-width: 200px; z-index: 10;">
@@ -596,52 +639,6 @@
         </div>
     </div>
 
-    <div class="modal" id="passwordGeneratorModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Generate Password</h2>
-                <button class="close-btn" data-dismiss="modal">×</button>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="passwordLength">Length</label>
-                <input type="number" id="passwordLength" class="form-input" value="16" min="4" max="128">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Character Sets</label>
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    <label><input type="checkbox" id="useUppercase" checked> Uppercase Letters (A-Z)</label>
-                    <label><input type="checkbox" id="useLowercase" checked> Lowercase Letters (a-z)</label>
-                    <label><input type="checkbox" id="useDigits" checked> Digits (0-9)</label>
-                    <label><input type="checkbox" id="useSymbols" checked> Symbols (!@#$%^&* etc.)</label>
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Options</label>
-                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    <label><input type="checkbox" id="excludeAmbiguous"> Exclude Ambiguous Characters (O0Il)</label>
-                    <label><input type="checkbox" id="requireAllTypes"> Require at least one character from each selected set</label>
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Quick Lengths</label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button type="button" class="btn btn-secondary" data-length="12">12</button>
-                    <button type="button" class="btn btn-secondary" data-length="16">16</button>
-                    <button type="button" class="btn btn-secondary" data-length="24">24</button>
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Generated Password</label>
-                <div class="password-field">
-                    <input type="text" id="generatedPassword" class="password-input" readonly>
-                    <button type="button" class="toggle-password" onclick="toggleGeneratedPasswordVisibility()">👁️</button>
-                    <button type="button" class="copy-password" onclick="copyGeneratedPassword()">📋</button>
-                </div>
-            </div>
-            <button type="button" class="btn btn-primary" id="generatePasswordBtnModal" style="width: 100%;">Generate Password</button>
-        </div>
-    </div>
-
     <div class="modal" id="entryModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -662,10 +659,51 @@
                     <label class="form-label" for="entryPassword">Password</label>
                     <div class="password-field">
                         <input type="password" id="entryPassword" class="password-input" required>
-                        <button type="button" class="toggle-password" onclick="toggleModalPasswordVisibility()">👁️</button>
-                        <button type="button" class="copy-password" onclick="copyModalPassword()">📋</button>
+                        <button type="button" class="toggle-password" id="toggleModalPassword">👁️</button>
+                        <button type="button" class="copy-password" id="copyModalPassword">📋</button>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button type="button" class="btn btn-secondary" id="passwordSettingsBtn">Password Settings</button>
+                        <button type="button" class="btn btn-primary" id="generatePasswordBtn">Generate Password</button>
                     </div>
                 </div>
+                
+                <!-- Password Settings Section -->
+                <div class="password-settings hidden" id="passwordSettingsSection">
+                    <div class="password-settings-header">
+                        <div class="password-settings-title">Password Generation Settings</div>
+                    </div>
+                    <div class="password-settings-content">
+                        <div class="form-group">
+                            <label class="form-label" for="passwordLength">Length</label>
+                            <input type="number" id="passwordLength" class="form-input" value="16" min="4" max="128">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Character Sets</label>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label><input type="checkbox" id="useUppercase" checked> Uppercase Letters (A-Z)</label>
+                                <label><input type="checkbox" id="useLowercase" checked> Lowercase Letters (a-z)</label>
+                                <label><input type="checkbox" id="useDigits" checked> Digits (0-9)</label>
+                                <label><input type="checkbox" id="useSymbols" checked> Symbols (!@#$%^&* etc.)</label>
+                            </div>
+                        </div>
+                        <div class="form-group password-settings-fullwidth">
+                            <label class="form-label">Options</label>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label><input type="checkbox" id="excludeAmbiguous"> Exclude Ambiguous Characters (O0Il)</label>
+                                <label><input type="checkbox" id="requireAllTypes"> Require at least one character from each selected set</label>
+                            </div>
+                        </div>
+                        <div class="form-group password-settings-fullwidth">
+                            <label class="form-label" for="excludeChars">Exclude Characters</label>
+                            <input type="text" id="excludeChars" class="form-input" placeholder="!@#">
+                        </div>
+                    </div>
+                    <div class="password-settings-actions">
+                        <button type="button" class="btn btn-secondary" id="closePasswordSettings">Close Settings</button>
+                    </div>
+                </div>
+                
                 <div class="form-group">
                     <label class="form-label" for="entryNotes">Notes</label>
                     <textarea id="entryNotes" class="form-input form-textarea"></textarea>
@@ -745,7 +783,6 @@
             openVaultBtn: document.getElementById('openVaultBtn'),
             lockBtn: document.getElementById('lockBtn'),
             addEntryBtn: document.getElementById('addEntryBtn'),
-            generatePasswordBtn: document.getElementById('generatePasswordBtn'),
             importExportBtn: document.getElementById('importExportBtn'),
             importExportMenu: document.getElementById('importExportMenu'),
             importCsvBtn: document.getElementById('importCsvBtn'),
@@ -759,7 +796,6 @@
             modals: document.querySelectorAll('.modal'),
             createVaultModal: document.getElementById('createVaultModal'),
             openVaultModal: document.getElementById('openVaultModal'),
-            passwordGeneratorModal: document.getElementById('passwordGeneratorModal'),
             entryModal: document.getElementById('entryModal'),
             csvWarningModal: document.getElementById('csvWarningModal'),
             deleteConfirmationModal: document.getElementById('deleteConfirmationModal'),
@@ -775,7 +811,15 @@
             // Delete confirmation elements
             entryToDeleteName: document.getElementById('entryToDeleteName'),
             cancelDelete: document.getElementById('cancelDelete'),
-            confirmDelete: document.getElementById('confirmDelete')
+            confirmDelete: document.getElementById('confirmDelete'),
+            
+            // Password generation elements
+            passwordSettingsBtn: document.getElementById('passwordSettingsBtn'),
+            passwordSettingsSection: document.getElementById('passwordSettingsSection'),
+            generatePasswordBtn: document.getElementById('generatePasswordBtn'),
+            closePasswordSettings: document.getElementById('closePasswordSettings'),
+            toggleModalPassword: document.getElementById('toggleModalPassword'),
+            copyModalPassword: document.getElementById('copyModalPassword')
         };
 
         // Initialize the application
@@ -792,7 +836,6 @@
             elements.openVaultBtn.addEventListener('click', () => showModal(elements.openVaultModal));
             elements.lockBtn.addEventListener('click', lockVault);
             elements.addEntryBtn.addEventListener('click', () => showAddEntryModal());
-            elements.generatePasswordBtn.addEventListener('click', () => showModal(elements.passwordGeneratorModal));
             elements.importExportBtn.addEventListener('click', toggleImportExportMenu);
             elements.importCsvBtn.addEventListener('click', () => importCsv());
             elements.exportCsvBtn.addEventListener('click', () => showModal(elements.csvWarningModal));
@@ -800,6 +843,13 @@
             elements.saveVaultBtn.addEventListener('click', saveVaultToFile);
             elements.searchInput.addEventListener('input', filterEntries);
             elements.themeToggle.addEventListener('click', toggleTheme);
+            
+            // Password generation and settings
+            elements.passwordSettingsBtn.addEventListener('click', togglePasswordSettings);
+            elements.generatePasswordBtn.addEventListener('click', generatePasswordForEntry);
+            elements.closePasswordSettings.addEventListener('click', togglePasswordSettings);
+            elements.toggleModalPassword.addEventListener('click', toggleModalPasswordVisibility);
+            elements.copyModalPassword.addEventListener('click', copyModalPassword);
             
             // Modal dismiss buttons
             document.querySelectorAll('.close-btn, [data-dismiss="modal"]').forEach(btn => {
@@ -823,27 +873,18 @@
             elements.openVaultForm.addEventListener('submit', openVault);
             elements.entryForm.addEventListener('submit', saveEntry);
             
-            // Password generator
-            document.getElementById('generatePasswordBtnModal').addEventListener('click', generatePassword);
-            document.querySelectorAll('[data-length]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    document.getElementById('passwordLength').value = e.target.getAttribute('data-length');
-                });
-            });
-            
             // CSV warning
             document.getElementById('understandRisk').addEventListener('change', (e) => {
                 document.getElementById('confirmCsvExport').disabled = !e.target.checked;
             });
             
-            // FIXED: Corrected the typo from adderscriptEventListener to addEventListener
             document.getElementById('confirmCsvExport').addEventListener('click', exportCsvPlain);
             
             // Delete confirmation
             elements.cancelDelete.addEventListener('click', () => hideModal(elements.deleteConfirmationModal));
             elements.confirmDelete.addEventListener('click', confirmDeleteEntry);
             
-            // Event delegation for entry actions (FIXED: Using event delegation instead of inline onclick)
+            // Event delegation for entry actions
             elements.entriesContainer.addEventListener('click', handleEntryActionClick);
         }
 
@@ -926,6 +967,7 @@
             if (modal === elements.entryModal) {
                 elements.entryForm.reset();
                 document.getElementById('entryId').value = '';
+                elements.passwordSettingsSection.classList.add('hidden');
             }
             
             if (modal === elements.csvWarningModal) {
@@ -941,6 +983,11 @@
         function toggleImportExportMenu() {
             elements.importExportMenu.style.display = 
                 elements.importExportMenu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Password settings toggle
+        function togglePasswordSettings() {
+            elements.passwordSettingsSection.classList.toggle('hidden');
         }
 
         // Notification system
@@ -993,7 +1040,7 @@
             showNotification('Vault created successfully', 'success');
         }
 
-        async function openVault(e) {
+        function openVault(e) {
             e.preventDefault();
             
             const fileInput = document.getElementById('vaultFile');
@@ -1004,53 +1051,80 @@
                 return;
             }
             
-            if (masterPassword.length < 8) {
-                showNotification('Master password must be at least 8 characters', 'error');
-                return;
-            }
+            const file = fileInput.files[0];
+            const reader = new FileReader();
             
-            try {
-                const file = fileInput.files[0];
-                const fileContent = await readFileAsText(file);
-                
-                // Show progress bar during decryption
-                const progressBar = document.getElementById('decryptProgressBar');
-                progressBar.style.width = '50%';
-                
-                // Parse and decrypt the vault
-                const vaultData = JSON.parse(fileContent);
-                
-                // Derive key from master password
-                state.masterPassword = masterPassword;
-                
-                // Decrypt the vault
-                const decryptedVault = await decryptVault(vaultData, masterPassword);
-                
-                progressBar.style.width = '100%';
-                
-                state.vault = decryptedVault;
-                state.isUnlocked = true;
-                
-                // Show main interface
-                elements.welcomeScreen.style.display = 'none';
-                elements.appInterface.style.display = 'block';
-                
-                // Render entries
-                renderEntries();
-                
-                hideModal(elements.openVaultModal);
-                showNotification('Vault unlocked successfully', 'success');
-                
-                // Reset progress bar after a short delay
-                setTimeout(() => {
-                    progressBar.style.width = '0';
-                }, 500);
-                
-            } catch (error) {
-                console.error('Error opening vault:', error);
-                showNotification('Failed to open vault. Invalid password or corrupted file.', 'error');
-                document.getElementById('decryptProgressBar').style.width = '0';
-            }
+            reader.onload = async (e) => {
+                try {
+                    const encryptedData = e.target.result;
+                    
+                    // Derive key from master password
+                    const salt = encryptedData.slice(0, 16);
+                    const iv = encryptedData.slice(16, 28);
+                    const ciphertext = encryptedData.slice(28);
+                    
+                    // Simulate progress (in a real app, this would be actual progress)
+                    const progressBar = document.getElementById('decryptProgressBar');
+                    for (let i = 0; i <= 100; i += 5) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        progressBar.style.width = `${i}%`;
+                    }
+                    
+                    // Import key
+                    const keyMaterial = await window.crypto.subtle.importKey(
+                        'raw',
+                        new TextEncoder().encode(masterPassword),
+                        { name: 'PBKDF2' },
+                        false,
+                        ['deriveBits', 'deriveKey']
+                    );
+                    
+                    // Derive key using PBKDF2
+                    const key = await window.crypto.subtle.deriveKey(
+                        {
+                            name: 'PBKDF2',
+                            salt: salt,
+                            iterations: 100000,
+                            hash: 'SHA-256'
+                        },
+                        keyMaterial,
+                        { name: 'AES-GCM', length: 256 },
+                        false,
+                        ['decrypt']
+                    );
+                    
+                    // Decrypt data
+                    const decryptedData = await window.crypto.subtle.decrypt(
+                        {
+                            name: 'AES-GCM',
+                            iv: iv
+                        },
+                        key,
+                        ciphertext
+                    );
+                    
+                    // Parse decrypted JSON
+                    state.vault = JSON.parse(new TextDecoder().decode(decryptedData));
+                    state.masterPassword = masterPassword;
+                    state.isUnlocked = true;
+                    
+                    // Show main interface
+                    elements.welcomeScreen.style.display = 'none';
+                    elements.appInterface.style.display = 'block';
+                    
+                    // Render entries
+                    renderEntries();
+                    
+                    hideModal(elements.openVaultModal);
+                    showNotification('Vault unlocked successfully', 'success');
+                } catch (error) {
+                    console.error('Failed to open vault:', error);
+                    showNotification('Failed to open vault. Wrong password or corrupted file.', 'error');
+                    document.getElementById('decryptProgressBar').style.width = '0';
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
         }
 
         function lockVault() {
@@ -1061,8 +1135,8 @@
             elements.entriesContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🔒</div>
-                    <h3>Vault Locked</h3>
-                    <p>Please unlock your vault to view entries</p>
+                    <h3>Vault is locked</h3>
+                    <p>Unlock your vault to view your passwords</p>
                 </div>
             `;
             
@@ -1070,7 +1144,7 @@
             elements.welcomeScreen.style.display = 'block';
             elements.appInterface.style.display = 'none';
             
-            showNotification('Vault locked', 'success');
+            showNotification('Vault locked', 'info');
         }
 
         async function saveVaultToFile() {
@@ -1080,28 +1154,64 @@
             }
             
             try {
-                // Encrypt the vault
-                const encryptedVault = await encryptVault(state.vault, state.masterPassword);
+                // Generate random salt and IV
+                const salt = window.crypto.getRandomValues(new Uint8Array(16));
+                const iv = window.crypto.getRandomValues(new Uint8Array(12));
                 
-                // Create a blob and download link
-                const blob = new Blob([JSON.stringify(encryptedVault)], { type: 'application/json' });
+                // Import key
+                const keyMaterial = await window.crypto.subtle.importKey(
+                    'raw',
+                    new TextEncoder().encode(state.masterPassword),
+                    { name: 'PBKDF2' },
+                    false,
+                    ['deriveBits', 'deriveKey']
+                );
+                
+                // Derive key using PBKDF2
+                const key = await window.crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: salt,
+                        iterations: 100000,
+                        hash: 'SHA-256'
+                    },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt']
+                );
+                
+                // Encrypt vault data
+                const data = new TextEncoder().encode(JSON.stringify(state.vault));
+                const ciphertext = await window.crypto.subtle.encrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: iv
+                    },
+                    key,
+                    data
+                );
+                
+                // Combine salt, IV and ciphertext
+                const encryptedData = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+                encryptedData.set(salt, 0);
+                encryptedData.set(iv, salt.length);
+                encryptedData.set(new Uint8Array(ciphertext), salt.length + iv.length);
+                
+                // Create blob and download link
+                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
-                
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `securepass-vault-${new Date().toISOString().split('T')[0]}.vault`;
+                a.download = 'passmanpro.vault';
                 document.body.appendChild(a);
                 a.click();
-                
-                // Clean up
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
                 
                 showNotification('Vault saved successfully', 'success');
             } catch (error) {
-                console.error('Error saving vault:', error);
+                console.error('Failed to save vault:', error);
                 showNotification('Failed to save vault', 'error');
             }
         }
@@ -1114,8 +1224,6 @@
             }
             
             document.getElementById('entryModalTitle').textContent = 'Add Entry';
-            elements.entryForm.reset();
-            document.getElementById('entryId').value = '';
             showModal(elements.entryModal);
         }
 
@@ -1128,21 +1236,15 @@
             }
             
             const entryId = document.getElementById('entryId').value;
-            const name = document.getElementById('entryName').value;
-            const username = document.getElementById('entryUsername').value;
-            const password = document.getElementById('entryPassword').value;
-            const notes = document.getElementById('entryNotes').value;
-            const tags = document.getElementById('entryTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
-            
             const entry = {
                 id: entryId || Date.now().toString(),
-                name,
-                username,
-                password,
-                notes,
-                tags,
-                createdAt: entryId ? state.vault.entries.find(e => e.id === entryId)?.createdAt || Date.now() : Date.now(),
-                updatedAt: Date.now()
+                name: document.getElementById('entryName').value,
+                username: document.getElementById('entryUsername').value,
+                password: document.getElementById('entryPassword').value,
+                notes: document.getElementById('entryNotes').value,
+                tags: document.getElementById('entryTags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
+                createdAt: entryId ? state.vault.entries.find(e => e.id === entryId).createdAt : new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             };
             
             if (entryId) {
@@ -1156,6 +1258,9 @@
                 state.vault.entries.push(entry);
             }
             
+            // Save to undo stack
+            state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
+            
             // Render entries
             renderEntries();
             
@@ -1164,155 +1269,62 @@
         }
 
         function editEntry(id) {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
             const entry = state.vault.entries.find(e => e.id === id);
-            if (!entry) {
-                showNotification('Entry not found', 'error');
-                return;
-            }
+            if (!entry) return;
             
             document.getElementById('entryModalTitle').textContent = 'Edit Entry';
             document.getElementById('entryId').value = entry.id;
             document.getElementById('entryName').value = entry.name;
-            document.getElementById('entryUsername').value = entry.username || '';
+            document.getElementById('entryUsername').value = entry.username;
             document.getElementById('entryPassword').value = entry.password;
-            document.getElementById('entryNotes').value = entry.notes || '';
+            document.getElementById('entryNotes').value = entry.notes;
             document.getElementById('entryTags').value = entry.tags.join(', ');
             
             showModal(elements.entryModal);
         }
 
         function duplicateEntry(id) {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
             const entry = state.vault.entries.find(e => e.id === id);
-            if (!entry) {
-                showNotification('Entry not found', 'error');
-                return;
-            }
+            if (!entry) return;
             
             const duplicatedEntry = {
                 ...entry,
                 id: Date.now().toString(),
                 name: `${entry.name} (Copy)`,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             };
             
             state.vault.entries.push(duplicatedEntry);
+            
+            // Save to undo stack
+            state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
+            
             renderEntries();
             showNotification('Entry duplicated successfully', 'success');
         }
 
         function deleteEntry(id) {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
             const entry = state.vault.entries.find(e => e.id === id);
-            if (!entry) {
-                showNotification('Entry not found', 'error');
-                return;
-            }
+            if (!entry) return;
             
-            // Store the entry to delete and show confirmation
             state.entryToDelete = id;
-            elements.entryToDeleteName.textContent = entry.name;
+            document.getElementById('entryToDeleteName').textContent = entry.name;
             showModal(elements.deleteConfirmationModal);
         }
 
         function confirmDeleteEntry() {
             if (!state.entryToDelete) return;
             
-            const index = state.vault.entries.findIndex(e => e.id === state.entryToDelete);
-            if (index !== -1) {
-                state.vault.entries.splice(index, 1);
-                renderEntries();
-                showNotification('Entry deleted successfully', 'success');
-            }
+            // Save to undo stack
+            state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
             
+            // Remove entry
+            state.vault.entries = state.vault.entries.filter(e => e.id !== state.entryToDelete);
+            
+            renderEntries();
             hideModal(elements.deleteConfirmationModal);
-        }
-
-        function togglePasswordVisibility(id) {
-            const passwordInput = document.getElementById(`password-${id}`);
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-            } else {
-                passwordInput.type = 'password';
-            }
-        }
-
-        function toggleModalPasswordVisibility() {
-            const passwordInput = document.getElementById('entryPassword');
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-            } else {
-                passwordInput.type = 'password';
-            }
-        }
-
-        function toggleGeneratedPasswordVisibility() {
-            const passwordInput = document.getElementById('generatedPassword');
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-            } else {
-                passwordInput.type = 'password';
-            }
-        }
-
-        function copyPasswordToClipboard(id) {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
-            const entry = state.vault.entries.find(e => e.id === id);
-            if (!entry) {
-                showNotification('Entry not found', 'error');
-                return;
-            }
-            
-            navigator.clipboard.writeText(entry.password)
-                .then(() => {
-                    showNotification('Password copied to clipboard', 'success');
-                })
-                .catch(err => {
-                    console.error('Failed to copy password:', err);
-                    showNotification('Failed to copy password', 'error');
-                });
-        }
-
-        function copyModalPassword() {
-            const passwordInput = document.getElementById('entryPassword');
-            navigator.clipboard.writeText(passwordInput.value)
-                .then(() => {
-                    showNotification('Password copied to clipboard', 'success');
-                })
-                .catch(err => {
-                    console.error('Failed to copy password:', err);
-                    showNotification('Failed to copy password', 'error');
-                });
-        }
-
-        function copyGeneratedPassword() {
-            const passwordInput = document.getElementById('generatedPassword');
-            navigator.clipboard.writeText(passwordInput.value)
-                .then(() => {
-                    showNotification('Password copied to clipboard', 'success');
-                })
-                .catch(err => {
-                    console.error('Failed to copy password:', err);
-                    showNotification('Failed to copy password', 'error');
-                });
+            showNotification('Entry deleted successfully', 'success');
         }
 
         function filterEntries() {
@@ -1326,8 +1338,8 @@
             const filteredEntries = state.vault.entries.filter(entry => 
                 entry.name.toLowerCase().includes(searchTerm) ||
                 entry.username.toLowerCase().includes(searchTerm) ||
-                (entry.notes && entry.notes.toLowerCase().includes(searchTerm)) ||
-                entry.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+                entry.tags.some(tag => tag.toLowerCase().includes(searchTerm)) ||
+                entry.notes.toLowerCase().includes(searchTerm)
             );
             
             renderEntries(filteredEntries);
@@ -1338,22 +1350,19 @@
                 elements.entriesContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">🔍</div>
-                        <h3>No entries found</h3>
+                        <h3>No passwords found</h3>
                         <p>Try adjusting your search or add a new entry</p>
                     </div>
                 `;
                 return;
             }
             
-            // Sort entries by name
-            entries.sort((a, b) => a.name.localeCompare(b.name));
-            
             elements.entriesContainer.innerHTML = entries.map(entry => `
                 <div class="entry-card" data-id="${entry.id}">
                     <div class="entry-header">
                         <div>
                             <div class="entry-name">${escapeHtml(entry.name)}</div>
-                            <div class="entry-username">${escapeHtml(entry.username || 'No username')}</div>
+                            <div class="entry-username">${escapeHtml(entry.username)}</div>
                         </div>
                         <div class="entry-actions">
                             <button class="action-btn" title="Edit">✏️</button>
@@ -1363,25 +1372,83 @@
                     </div>
                     <div class="password-field">
                         <input type="password" id="password-${entry.id}" class="password-input" value="${escapeHtml(entry.password)}" readonly>
-                        <button class="toggle-password" data-id="${entry.id}">👁️</button>
-                        <button class="copy-password" data-id="${entry.id}">📋</button>
+                        <button class="toggle-password" data-entry="${entry.id}">👁️</button>
+                        <button class="copy-password" data-entry="${entry.id}">📋</button>
                     </div>
-                    ${entry.notes ? `<div class="form-group"><div class="form-label">Notes:</div><div>${escapeHtml(entry.notes)}</div></div>` : ''}
                     ${entry.tags.length ? `
                         <div class="entry-tags">
                             ${entry.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                         </div>
                     ` : ''}
                     <div class="entry-footer">
-                        <div>Created: ${new Date(entry.createdAt).toLocaleDateString()}</div>
-                        <div>Updated: ${new Date(entry.updatedAt).toLocaleDateString()}</div>
+                        <div>Updated: ${formatDate(entry.updatedAt)}</div>
+                        <div title="Password strength" class="password-strength-indicator">${getPasswordStrengthIndicator(entry.password)}</div>
                     </div>
                 </div>
             `).join('');
         }
 
-        // Password generation
-        function generatePassword() {
+        // Password utilities
+        function togglePasswordVisibility(id) {
+            const passwordInput = document.getElementById(`password-${id}`);
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+            } else {
+                passwordInput.type = 'password';
+            }
+        }
+
+        function toggleModalPasswordVisibility() {
+            const passwordInput = document.getElementById('entryPassword');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                elements.toggleModalPassword.textContent = '🙈';
+            } else {
+                passwordInput.type = 'password';
+                elements.toggleModalPassword.textContent = '👁️';
+            }
+        }
+
+        function copyPasswordToClipboard(id) {
+            const entry = state.vault.entries.find(e => e.id === id);
+            if (!entry) return;
+            
+            navigator.clipboard.writeText(entry.password).then(() => {
+                const copyBtn = document.querySelector(`.copy-password[data-entry="${id}"]`);
+                const notification = document.createElement('div');
+                notification.className = 'copy-notification';
+                notification.textContent = 'Copied!';
+                copyBtn.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.classList.add('show');
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        if (copyBtn.contains(notification)) {
+                            copyBtn.removeChild(notification);
+                        }
+                    }, 300);
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy password:', err);
+                showNotification('Failed to copy password', 'error');
+            });
+        }
+
+        function copyModalPassword() {
+            const passwordInput = document.getElementById('entryPassword');
+            navigator.clipboard.writeText(passwordInput.value).then(() => {
+                showNotification('Password copied to clipboard', 'success');
+            }).catch(err => {
+                console.error('Failed to copy password:', err);
+                showNotification('Failed to copy password', 'error');
+            });
+        }
+
+        function generatePasswordForEntry() {
             const length = parseInt(document.getElementById('passwordLength').value) || 16;
             const useUppercase = document.getElementById('useUppercase').checked;
             const useLowercase = document.getElementById('useLowercase').checked;
@@ -1389,347 +1456,333 @@
             const useSymbols = document.getElementById('useSymbols').checked;
             const excludeAmbiguous = document.getElementById('excludeAmbiguous').checked;
             const requireAllTypes = document.getElementById('requireAllTypes').checked;
+            const excludeChars = document.getElementById('excludeChars').value;
             
-            if (!useUppercase && !useLowercase && !useDigits && !useSymbols) {
-                showNotification('Please select at least one character set', 'error');
-                return;
-            }
+            const password = generatePassword(
+                length, 
+                useUppercase, 
+                useLowercase, 
+                useDigits, 
+                useSymbols, 
+                excludeAmbiguous, 
+                requireAllTypes,
+                excludeChars
+            );
             
-            if (length < 4 || length > 128) {
-                showNotification('Password length must be between 4 and 128', 'error');
-                return;
-            }
+            document.getElementById('entryPassword').value = password;
+            document.getElementById('entryPassword').type = 'text';
+            elements.toggleModalPassword.textContent = '🙈';
             
-            let charset = '';
-            if (useLowercase) charset += 'abcdefghijklmnopqrstuvwxyz';
-            if (useUppercase) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            if (useDigits) charset += '0123456789';
-            if (useSymbols) charset += '!@#$%^&*()_+-=[]{}|;:,.<>?';
-            
-            if (excludeAmbiguous) {
-                charset = charset.replace(/[O0Il]/g, '');
-            }
-            
-            let password = '';
-            const charsetLength = charset.length;
-            
-            if (charsetLength === 0) {
-                showNotification('No characters available for generation', 'error');
-                return;
-            }
-            
-            // Generate password with required character types if needed
-            if (requireAllTypes) {
-                const requiredChars = [];
-                if (useLowercase) {
-                    const lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
-                    requiredChars.push(lowercaseChars[Math.floor(Math.random() * lowercaseChars.length)]);
-                }
-                if (useUppercase) {
-                    const uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                    requiredChars.push(uppercaseChars[Math.floor(Math.random() * uppercaseChars.length)]);
-                }
-                if (useDigits) {
-                    const digitChars = '0123456789';
-                    requiredChars.push(digitChars[Math.floor(Math.random() * digitChars.length)]);
-                }
-                if (useSymbols) {
-                    const symbolChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-                    requiredChars.push(symbolChars[Math.floor(Math.random() * symbolChars.length)]);
-                }
-                
-                // Fill the rest with random characters
-                for (let i = 0; i < length - requiredChars.length; i++) {
-                    password += charset[Math.floor(Math.random() * charsetLength)];
-                }
-                
-                // Insert required characters at random positions
-                for (const char of requiredChars) {
-                    const position = Math.floor(Math.random() * (password.length + 1));
-                    password = password.slice(0, position) + char + password.slice(position);
-                }
-            } else {
-                // Simple random generation
-                for (let i = 0; i < length; i++) {
-                    password += charset[Math.floor(Math.random() * charsetLength)];
-                }
-            }
-            
-            document.getElementById('generatedPassword').value = password;
-            document.getElementById('generatedPassword').type = 'password';
+            showNotification('Password generated successfully', 'success');
         }
 
-        // Import/Export functionality
+        function generatePassword(
+            length = 16,
+            useUppercase = true,
+            useLowercase = true,
+            useDigits = true,
+            useSymbols = true,
+            excludeAmbiguous = true,
+            requireAllTypes = true,
+            excludeChars = ''
+        ) {
+            // Define character sets
+            const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+            const digits = '0123456789';
+            const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+            
+            // Remove ambiguous characters if needed
+            let safeUppercase = excludeAmbiguous ? uppercase.replace(/[O]/g, '') : uppercase;
+            let safeLowercase = excludeAmbiguous ? lowercase.replace(/[l]/g, '') : lowercase;
+            let safeDigits = excludeAmbiguous ? digits.replace(/[01]/g, '') : digits;
+            let safeSymbols = excludeAmbiguous ? symbols.replace(/[|;:,.<>{}[]]/g, '') : symbols;
+            
+            // Filter out excluded characters
+            if (excludeChars) {
+                const excludeRegex = new RegExp(`[${excludeChars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`, 'g');
+                safeUppercase = safeUppercase.replace(excludeRegex, '');
+                safeLowercase = safeLowercase.replace(excludeRegex, '');
+                safeDigits = safeDigits.replace(excludeRegex, '');
+                safeSymbols = safeSymbols.replace(excludeRegex, '');
+            }
+            
+            // Build the character pool based on selected options
+            let charPool = '';
+            const selectedSets = [];
+            
+            if (useUppercase && safeUppercase) {
+                charPool += safeUppercase;
+                selectedSets.push(safeUppercase);
+            }
+            
+            if (useLowercase && safeLowercase) {
+                charPool += safeLowercase;
+                selectedSets.push(safeLowercase);
+            }
+            
+            if (useDigits && safeDigits) {
+                charPool += safeDigits;
+                selectedSets.push(safeDigits);
+            }
+            
+            if (useSymbols && safeSymbols) {
+                charPool += safeSymbols;
+                selectedSets.push(safeSymbols);
+            }
+            
+            // If no character sets are selected, return empty string
+            if (!charPool) return '';
+            
+            let password = '';
+            
+            // If we need at least one character from each selected set
+            if (requireAllTypes && selectedSets.length > 0) {
+                // Add one character from each selected set first
+                for (const set of selectedSets) {
+                    password += set[Math.floor(Math.random() * set.length)];
+                }
+                
+                // Fill the rest with random characters from the pool
+                for (let i = password.length; i < length; i++) {
+                    password += charPool[Math.floor(Math.random() * charPool.length)];
+                }
+                
+                // Shuffle the password to avoid predictable pattern
+                password = password.split('').sort(() => Math.random() - 0.5).join('');
+            } else {
+                // Generate completely random password
+                for (let i = 0; i < length; i++) {
+                    password += charPool[Math.floor(Math.random() * charPool.length)];
+                }
+            }
+            
+            return password;
+        }
+
+        function getPasswordStrengthIndicator(password) {
+            if (!password) return '❌';
+            
+            let strength = 0;
+            
+            // Length check
+            if (password.length >= 12) strength++;
+            if (password.length >= 16) strength++;
+            
+            // Character variety checks
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[a-z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^A-Za-z0-9]/.test(password)) strength++;
+            
+            if (strength >= 6) return '🔒🔒🔒'; // Strong
+            if (strength >= 4) return '🔒🔒';   // Medium
+            return '🔒';                        // Weak
+        }
+
+        // Import/Export functions
         function importCsv() {
-            // Create a file input element
+            // Create file input element
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
             fileInput.accept = '.csv';
             
-            fileInput.onchange = async (e) => {
+            fileInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                try {
-                    const csvContent = await readFileAsText(file);
-                    const lines = csvContent.split('\n');
-                    const headers = lines[0].split(',').map(h => h.trim());
-                    
-                    // Check if required headers are present
-                    if (!headers.includes('name') || !headers.includes('password')) {
-                        showNotification('CSV file must contain "name" and "password" columns', 'error');
-                        return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const csvData = e.target.result;
+                        const lines = csvData.split('\n');
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        
+                        // Check if required headers exist
+                        if (!headers.includes('name') || !headers.includes('password')) {
+                            showNotification('CSV must contain "name" and "password" columns', 'error');
+                            return;
+                        }
+                        
+                        const newEntries = [];
+                        
+                        for (let i = 1; i < lines.length; i++) {
+                            if (!lines[i].trim()) continue;
+                            
+                            const values = lines[i].split(',').map(v => v.trim());
+                            const entry = {};
+                            
+                            headers.forEach((header, index) => {
+                                if (values[index]) {
+                                    entry[header] = values[index];
+                                }
+                            });
+                            
+                            if (entry.name && entry.password) {
+                                newEntries.push({
+                                    id: Date.now().toString() + i,
+                                    name: entry.name,
+                                    username: entry.username || '',
+                                    password: entry.password,
+                                    notes: entry.notes || '',
+                                    tags: entry.tags ? entry.tags.split(';').map(t => t.trim()) : [],
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString()
+                                });
+                            }
+                        }
+                        
+                        if (newEntries.length) {
+                            // Save to undo stack
+                            state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
+                            
+                            // Add new entries
+                            state.vault.entries = [...state.vault.entries, ...newEntries];
+                            
+                            renderEntries();
+                            showNotification(`Imported ${newEntries.length} entries successfully`, 'success');
+                        } else {
+                            showNotification('No valid entries found in CSV', 'warning');
+                        }
+                    } catch (error) {
+                        console.error('Failed to import CSV:', error);
+                        showNotification('Failed to import CSV. Invalid format.', 'error');
                     }
-                    
-                    const newEntries = [];
-                    
-                    for (let i = 1; i < lines.length; i++) {
-                        if (!lines[i].trim()) continue;
-                        
-                        const values = lines[i].split(',').map(v => v.trim());
-                        const entry = {};
-                        
-                        headers.forEach((header, index) => {
-                            entry[header] = values[index] || '';
-                        });
-                        
-                        // Ensure required fields
-                        if (!entry.name || !entry.password) continue;
-                        
-                        newEntries.push({
-                            id: Date.now().toString() + i,
-                            name: entry.name,
-                            username: entry.username || entry.email || '',
-                            password: entry.password,
-                            notes: entry.notes || '',
-                            tags: entry.tags ? entry.tags.split(';').map(t => t.trim()) : [],
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-                    }
-                    
-                    // Add to existing entries
-                    state.vault.entries = [...state.vault.entries, ...newEntries];
-                    renderEntries();
-                    
-                    showNotification(`Imported ${newEntries.length} entries from CSV`, 'success');
-                    hideModal(elements.importExportMenu);
-                    
-                } catch (error) {
-                    console.error('Error importing CSV:', error);
-                    showNotification('Failed to import CSV file', 'error');
-                }
+                };
+                
+                reader.readAsText(file);
             };
             
             fileInput.click();
         }
 
         function exportCsvPlain() {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
-            if (!document.getElementById('understandRisk').checked) {
-                showNotification('Please confirm you understand the risks', 'error');
-                return;
-            }
-            
             if (!state.vault.entries.length) {
-                showNotification('No entries to export', 'error');
+                showNotification('No entries to export', 'warning');
                 return;
             }
             
             // Create CSV content
-            let csvContent = 'name,username,password,notes,tags\n';
+            const headers = ['name', 'username', 'password', 'notes', 'tags'];
+            let csvContent = headers.join(',') + '\n';
             
             state.vault.entries.forEach(entry => {
-                const escapedName = `"${entry.name.replace(/"/g, '""')}"`;
-                const escapedUsername = `"${(entry.username || '').replace(/"/g, '""')}"`;
-                const escapedPassword = `"${entry.password.replace(/"/g, '""')}"`;
-                const escapedNotes = `"${(entry.notes || '').replace(/"/g, '""')}"`;
-                const escapedTags = `"${entry.tags.join('; ')}"`;
-                
-                csvContent += `${escapedName},${escapedUsername},${escapedPassword},${escapedNotes},${escapedTags}\n`;
+                const row = [
+                    `"${entry.name.replace(/"/g, '""')}"`,
+                    `"${entry.username.replace(/"/g, '""')}"`,
+                    `"${entry.password.replace(/"/g, '""')}"`,
+                    `"${entry.notes.replace(/"/g, '""')}"`,
+                    `"${entry.tags.join(';').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(',') + '\n';
             });
             
-            // Create download link
+            // Create blob and download link
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            
             const a = document.createElement('a');
             a.href = url;
-            a.download = `securepass-export-${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = 'passmanpro_export.csv';
             document.body.appendChild(a);
             a.click();
-            
-            // Clean up
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
             
             hideModal(elements.csvWarningModal);
             showNotification('CSV exported successfully', 'success');
         }
 
-        async function exportEncryptedCsv() {
-            if (!state.isUnlocked) {
-                showNotification('Vault is locked', 'error');
-                return;
-            }
-            
+        function exportEncryptedCsv() {
             if (!state.vault.entries.length) {
-                showNotification('No entries to export', 'error');
+                showNotification('No entries to export', 'warning');
                 return;
             }
             
-            try {
-                // Create CSV content
-                let csvContent = 'name,username,password,notes,tags\n';
-                
-                state.vault.entries.forEach(entry => {
-                    const escapedName = `"${entry.name.replace(/"/g, '""')}"`;
-                    const escapedUsername = `"${(entry.username || '').replace(/"/g, '""')}"`;
-                    const escapedPassword = `"${entry.password.replace(/"/g, '""')}"`;
-                    const escapedNotes = `"${(entry.notes || '').replace(/"/g, '""')}"`;
-                    const escapedTags = `"${entry.tags.join('; ')}"`;
-                    
-                    csvContent += `${escapedName},${escapedUsername},${escapedPassword},${escapedNotes},${escapedTags}\n`;
-                });
-                
-                // Encrypt the CSV content
-                const encryptedCsv = await encryptData(csvContent, state.masterPassword);
-                
-                // Create download link
-                const blob = new Blob([JSON.stringify(encryptedCsv)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `securepass-encrypted-export-${new Date().toISOString().split('T')[0]}.scsv`;
-                document.body.appendChild(a);
-                a.click();
-                
-                // Clean up
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
-                
-                hideModal(elements.importExportMenu);
-                showNotification('Encrypted CSV exported successfully', 'success');
-            } catch (error) {
-                console.error('Error exporting encrypted CSV:', error);
-                showNotification('Failed to export encrypted CSV', 'error');
-            }
-        }
-
-        // Crypto functions
-        async function deriveKey(password, salt, params) {
-            // Import password as key
-            const encoder = new TextEncoder();
-            const keyMaterial = await window.crypto.subtle.importKey(
-                'raw',
-                encoder.encode(password),
-                'PBKDF2',
-                false,
-                ['deriveBits', 'deriveKey']
-            );
+            // Create CSV content
+            const headers = ['name', 'username', 'password', 'notes', 'tags'];
+            let csvContent = headers.join(',') + '\n';
             
-            // Derive key using PBKDF2
-            const key = await window.crypto.subtle.deriveKey(
-                {
-                    name: 'PBKDF2',
-                    salt: encoder.encode(salt),
-                    iterations: 100000,
-                    hash: 'SHA-256'
-                },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt', 'decrypt']
-            );
+            state.vault.entries.forEach(entry => {
+                const row = [
+                    `"${entry.name.replace(/"/g, '""')}"`,
+                    `"${entry.username.replace(/"/g, '""')}"`,
+                    `"${entry.password.replace(/"/g, '""')}"`,
+                    `"${entry.notes.replace(/"/g, '""')}"`,
+                    `"${entry.tags.join(';').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            });
             
-            return key;
-        }
-
-        async function encryptData(data, password) {
+            // Encrypt the CSV content with the master password
             const salt = window.crypto.getRandomValues(new Uint8Array(16));
             const iv = window.crypto.getRandomValues(new Uint8Array(12));
             
-            const key = await deriveKey(password, salt, state.vault.argon2Params);
-            
-            const encoder = new TextEncoder();
-            const encodedData = encoder.encode(data);
-            
-            const encryptedData = await window.crypto.subtle.encrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: iv
-                },
-                key,
-                encodedData
-            );
-            
-            return {
-                salt: Array.from(salt),
-                iv: Array.from(iv),
-                data: Array.from(new Uint8Array(encryptedData))
-            };
-        }
-
-        async function decryptData(encryptedData, password) {
-            const salt = new Uint8Array(encryptedData.salt);
-            const iv = new Uint8Array(encryptedData.iv);
-            const data = new Uint8Array(encryptedData.data);
-            
-            const key = await deriveKey(password, salt, state.vault.argon2Params);
-            
-            const decryptedData = await window.crypto.subtle.decrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: iv
-                },
-                key,
-                data
-            );
-            
-            const decoder = new TextDecoder();
-            return decoder.decode(decryptedData);
-        }
-
-        async function encryptVault(vault, password) {
-            const vaultString = JSON.stringify(vault);
-            return await encryptData(vaultString, password);
-        }
-
-        async function decryptVault(encryptedVault, password) {
-            try {
-                const vaultString = await decryptData(encryptedVault, password);
-                return JSON.parse(vaultString);
-            } catch (error) {
-                throw new Error('Failed to decrypt vault - incorrect password or corrupted file');
-            }
-        }
-
-        // Utility functions
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.onerror = e => reject(e);
-                reader.readAsText(file);
+            window.crypto.subtle.importKey(
+                'raw',
+                new TextEncoder().encode(state.masterPassword),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveBits', 'deriveKey']
+            ).then(keyMaterial => {
+                return window.crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: salt,
+                        iterations: 100000,
+                        hash: 'SHA-256'
+                    },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt']
+                );
+            }).then(key => {
+                return window.crypto.subtle.encrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: iv
+                    },
+                    key,
+                    new TextEncoder().encode(csvContent)
+                );
+            }).then(ciphertext => {
+                // Combine salt, IV and ciphertext
+                const encryptedData = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+                encryptedData.set(salt, 0);
+                encryptedData.set(iv, salt.length);
+                encryptedData.set(new Uint8Array(ciphertext), salt.length + iv.length);
+                
+                // Create blob and download link
+                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'passmanpro_encrypted.csv.vault';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showNotification('Encrypted CSV exported successfully', 'success');
+            }).catch(error => {
+                console.error('Failed to export encrypted CSV:', error);
+                showNotification('Failed to export encrypted CSV', 'error');
             });
         }
 
+        // Utility functions
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // Initialize the application
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // Initialize the app
         init();
     </script>
 </body>
