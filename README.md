@@ -1,0 +1,2 @@
+# passwordmanager
+Offline Password Manager
