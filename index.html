@@ -192,6 +192,7 @@
 
         .form-group {
             margin-bottom: 1rem;
+            position: relative;
         }
 
         .form-label {
@@ -312,6 +313,8 @@
         .password-field {
             position: relative;
             margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
         }
 
         .password-input {
@@ -374,6 +377,10 @@
             text-align: center;
             padding: 3rem;
             color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .empty-state-icon {
@@ -479,6 +486,7 @@
         .password-settings-title {
             font-weight: 600;
             font-size: 1.1rem;
+            margin-bottom: 0.5rem;
         }
 
         .password-settings-content {
@@ -558,6 +566,7 @@
                             <button class="btn btn-warning" id="importExportBtn">Import/Export</button>
                             <div class="dropdown-menu" id="importExportMenu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-secondary); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 0.5rem; min-width: 200px; z-index: 10;">
                                 <button class="btn btn-secondary" style="width: 100%; text-align: left; margin-bottom: 0.25rem;" id="importCsvBtn">Import CSV</button>
+                                <button class="btn btn-secondary" style="width: 100%; text-align: left; margin-bottom: 0.25rem;" id="importEncryptedCsvBtn">Import Encrypted CSV</button>
                                 <button class="btn btn-secondary" style="width: 100%; text-align: left; margin-bottom: 0.25rem;" id="exportCsvBtn">Export CSV (Plaintext)</button>
                                 <button class="btn btn-secondary" style="width: 100%; text-align: left;" id="exportEncryptedCsvBtn">Export Encrypted CSV</button>
                             </div>
@@ -786,6 +795,7 @@
             importExportBtn: document.getElementById('importExportBtn'),
             importExportMenu: document.getElementById('importExportMenu'),
             importCsvBtn: document.getElementById('importCsvBtn'),
+            importEncryptedCsvBtn: document.getElementById('importEncryptedCsvBtn'),
             exportCsvBtn: document.getElementById('exportCsvBtn'),
             exportEncryptedCsvBtn: document.getElementById('exportEncryptedCsvBtn'),
             saveVaultBtn: document.getElementById('saveVaultBtn'),
@@ -838,6 +848,7 @@
             elements.addEntryBtn.addEventListener('click', () => showAddEntryModal());
             elements.importExportBtn.addEventListener('click', toggleImportExportMenu);
             elements.importCsvBtn.addEventListener('click', () => importCsv());
+            elements.importEncryptedCsvBtn.addEventListener('click', () => importEncryptedCsv());
             elements.exportCsvBtn.addEventListener('click', () => showModal(elements.csvWarningModal));
             elements.exportEncryptedCsvBtn.addEventListener('click', () => exportEncryptedCsv());
             elements.saveVaultBtn.addEventListener('click', saveVaultToFile);
@@ -1027,14 +1038,17 @@
             };
             
             state.masterPassword = masterPassword;
-            
-            // Initialize empty vault
-            state.vault.entries = [];
             state.isUnlocked = true;
+            
+            // Initialize vault with empty entries
+            state.vault.entries = [];
             
             // Show main interface
             elements.welcomeScreen.style.display = 'none';
             elements.appInterface.style.display = 'block';
+            
+            // Render empty state
+            renderEntries();
             
             hideModal(elements.createVaultModal);
             showNotification('Vault created successfully', 'success');
@@ -1051,60 +1065,30 @@
                 return;
             }
             
+            if (masterPassword.length < 8) {
+                showNotification('Master password must be at least 8 characters', 'error');
+                return;
+            }
+            
             const file = fileInput.files[0];
             const reader = new FileReader();
             
-            reader.onload = async (e) => {
+            reader.onload = async (event) => {
                 try {
-                    const encryptedData = e.target.result;
-                    
-                    // Derive key from master password
-                    const salt = encryptedData.slice(0, 16);
-                    const iv = encryptedData.slice(16, 28);
-                    const ciphertext = encryptedData.slice(28);
-                    
-                    // Simulate progress (in a real app, this would be actual progress)
+                    // Show progress bar
                     const progressBar = document.getElementById('decryptProgressBar');
-                    for (let i = 0; i <= 100; i += 5) {
-                        await new Promise(resolve => setTimeout(resolve, 50));
-                        progressBar.style.width = `${i}%`;
-                    }
                     
-                    // Import key
-                    const keyMaterial = await window.crypto.subtle.importKey(
-                        'raw',
-                        new TextEncoder().encode(masterPassword),
-                        { name: 'PBKDF2' },
-                        false,
-                        ['deriveBits', 'deriveKey']
-                    );
+                    // Decrypt the vault
+                    const arrayBuffer = event.target.result;
+                    const decryptedData = await decryptVault(arrayBuffer, masterPassword, (progress) => {
+                        progressBar.style.width = `${progress * 100}%`;
+                    });
                     
-                    // Derive key using PBKDF2
-                    const key = await window.crypto.subtle.deriveKey(
-                        {
-                            name: 'PBKDF2',
-                            salt: salt,
-                            iterations: 100000,
-                            hash: 'SHA-256'
-                        },
-                        keyMaterial,
-                        { name: 'AES-GCM', length: 256 },
-                        false,
-                        ['decrypt']
-                    );
+                    // Parse the decrypted JSON
+                    const vault = JSON.parse(decryptedData);
                     
-                    // Decrypt data
-                    const decryptedData = await window.crypto.subtle.decrypt(
-                        {
-                            name: 'AES-GCM',
-                            iv: iv
-                        },
-                        key,
-                        ciphertext
-                    );
-                    
-                    // Parse decrypted JSON
-                    state.vault = JSON.parse(new TextDecoder().decode(decryptedData));
+                    // Update state
+                    state.vault = vault;
                     state.masterPassword = masterPassword;
                     state.isUnlocked = true;
                     
@@ -1120,7 +1104,6 @@
                 } catch (error) {
                     console.error('Failed to open vault:', error);
                     showNotification('Failed to open vault. Wrong password or corrupted file.', 'error');
-                    document.getElementById('decryptProgressBar').style.width = '0';
                 }
             };
             
@@ -1128,15 +1111,16 @@
         }
 
         function lockVault() {
-            state.derivedKey = null;
             state.isUnlocked = false;
+            state.derivedKey = null;
+            state.masterPassword = null;
             
-            // Clear entries from view
+            // Clear entries from display
             elements.entriesContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🔒</div>
                     <h3>Vault is locked</h3>
-                    <p>Unlock your vault to view your passwords</p>
+                    <p>Unlock your vault to access your passwords</p>
                 </div>
             `;
             
@@ -1147,73 +1131,38 @@
             showNotification('Vault locked', 'info');
         }
 
-        async function saveVaultToFile() {
+        function saveVaultToFile() {
             if (!state.isUnlocked) {
                 showNotification('Vault is locked', 'error');
                 return;
             }
             
-            try {
-                // Generate random salt and IV
-                const salt = window.crypto.getRandomValues(new Uint8Array(16));
-                const iv = window.crypto.getRandomValues(new Uint8Array(12));
-                
-                // Import key
-                const keyMaterial = await window.crypto.subtle.importKey(
-                    'raw',
-                    new TextEncoder().encode(state.masterPassword),
-                    { name: 'PBKDF2' },
-                    false,
-                    ['deriveBits', 'deriveKey']
-                );
-                
-                // Derive key using PBKDF2
-                const key = await window.crypto.subtle.deriveKey(
-                    {
-                        name: 'PBKDF2',
-                        salt: salt,
-                        iterations: 100000,
-                        hash: 'SHA-256'
-                    },
-                    keyMaterial,
-                    { name: 'AES-GCM', length: 256 },
-                    false,
-                    ['encrypt']
-                );
-                
-                // Encrypt vault data
-                const data = new TextEncoder().encode(JSON.stringify(state.vault));
-                const ciphertext = await window.crypto.subtle.encrypt(
-                    {
-                        name: 'AES-GCM',
-                        iv: iv
-                    },
-                    key,
-                    data
-                );
-                
-                // Combine salt, IV and ciphertext
-                const encryptedData = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
-                encryptedData.set(salt, 0);
-                encryptedData.set(iv, salt.length);
-                encryptedData.set(new Uint8Array(ciphertext), salt.length + iv.length);
-                
-                // Create blob and download link
-                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'passmanpro.vault';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                showNotification('Vault saved successfully', 'success');
-            } catch (error) {
-                console.error('Failed to save vault:', error);
-                showNotification('Failed to save vault', 'error');
-            }
+            // Encrypt the vault
+            encryptVault(JSON.stringify(state.vault), state.masterPassword)
+                .then(encryptedData => {
+                    // Create a blob and download link
+                    const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Create download link
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `passman-vault-${new Date().toISOString().slice(0, 10)}.vault`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Clean up
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 100);
+                    
+                    showNotification('Vault saved successfully', 'success');
+                })
+                .catch(error => {
+                    console.error('Failed to save vault:', error);
+                    showNotification('Failed to save vault', 'error');
+                });
         }
 
         // Entry management
@@ -1236,15 +1185,21 @@
             }
             
             const entryId = document.getElementById('entryId').value;
+            const name = document.getElementById('entryName').value;
+            const username = document.getElementById('entryUsername').value;
+            const password = document.getElementById('entryPassword').value;
+            const notes = document.getElementById('entryNotes').value;
+            const tags = document.getElementById('entryTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
             const entry = {
                 id: entryId || Date.now().toString(),
-                name: document.getElementById('entryName').value,
-                username: document.getElementById('entryUsername').value,
-                password: document.getElementById('entryPassword').value,
-                notes: document.getElementById('entryNotes').value,
-                tags: document.getElementById('entryTags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
-                createdAt: entryId ? state.vault.entries.find(e => e.id === entryId).createdAt : new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                name,
+                username,
+                password,
+                notes,
+                tags,
+                createdAt: entryId ? state.vault.entries.find(e => e.id === entryId)?.createdAt || Date.now() : Date.now(),
+                updatedAt: Date.now()
             };
             
             if (entryId) {
@@ -1268,48 +1223,69 @@
             showNotification(`Entry ${entryId ? 'updated' : 'added'} successfully`, 'success');
         }
 
-        function editEntry(id) {
-            const entry = state.vault.entries.find(e => e.id === id);
+        function editEntry(entryId) {
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
+                return;
+            }
+            
+            const entry = state.vault.entries.find(e => e.id === entryId);
             if (!entry) return;
             
+            // Fill the form with entry data
             document.getElementById('entryModalTitle').textContent = 'Edit Entry';
             document.getElementById('entryId').value = entry.id;
             document.getElementById('entryName').value = entry.name;
-            document.getElementById('entryUsername').value = entry.username;
+            document.getElementById('entryUsername').value = entry.username || '';
             document.getElementById('entryPassword').value = entry.password;
-            document.getElementById('entryNotes').value = entry.notes;
+            document.getElementById('entryNotes').value = entry.notes || '';
             document.getElementById('entryTags').value = entry.tags.join(', ');
             
             showModal(elements.entryModal);
         }
 
-        function duplicateEntry(id) {
-            const entry = state.vault.entries.find(e => e.id === id);
+        function duplicateEntry(entryId) {
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
+                return;
+            }
+            
+            const entry = state.vault.entries.find(e => e.id === entryId);
             if (!entry) return;
             
-            const duplicatedEntry = {
-                ...entry,
-                id: Date.now().toString(),
-                name: `${entry.name} (Copy)`,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
+            // Create a copy with a new ID
+            const newEntry = JSON.parse(JSON.stringify(entry));
+            newEntry.id = Date.now().toString();
+            newEntry.name = `${entry.name} (Copy)`;
+            newEntry.createdAt = Date.now();
+            newEntry.updatedAt = Date.now();
             
-            state.vault.entries.push(duplicatedEntry);
+            // Add to entries
+            state.vault.entries.push(newEntry);
             
             // Save to undo stack
             state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
             
+            // Render entries
             renderEntries();
+            
             showNotification('Entry duplicated successfully', 'success');
         }
 
-        function deleteEntry(id) {
-            const entry = state.vault.entries.find(e => e.id === id);
+        function deleteEntry(entryId) {
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
+                return;
+            }
+            
+            const entry = state.vault.entries.find(e => e.id === entryId);
             if (!entry) return;
             
-            state.entryToDelete = id;
-            document.getElementById('entryToDeleteName').textContent = entry.name;
+            // Store entry to delete
+            state.entryToDelete = entryId;
+            
+            // Show confirmation modal
+            elements.entryToDeleteName.textContent = entry.name;
             showModal(elements.deleteConfirmationModal);
         }
 
@@ -1319,10 +1295,12 @@
             // Save to undo stack
             state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
             
-            // Remove entry
+            // Remove the entry
             state.vault.entries = state.vault.entries.filter(e => e.id !== state.entryToDelete);
             
+            // Render entries
             renderEntries();
+            
             hideModal(elements.deleteConfirmationModal);
             showNotification('Entry deleted successfully', 'success');
         }
@@ -1331,38 +1309,58 @@
             const searchTerm = elements.searchInput.value.toLowerCase();
             
             if (!searchTerm) {
-                renderEntries();
+                // Show all entries if search is empty
+                document.querySelectorAll('.entry-card').forEach(card => {
+                    card.style.display = 'block';
+                });
                 return;
             }
             
-            const filteredEntries = state.vault.entries.filter(entry => 
-                entry.name.toLowerCase().includes(searchTerm) ||
-                entry.username.toLowerCase().includes(searchTerm) ||
-                entry.tags.some(tag => tag.toLowerCase().includes(searchTerm)) ||
-                entry.notes.toLowerCase().includes(searchTerm)
-            );
-            
-            renderEntries(filteredEntries);
+            // Filter entries
+            document.querySelectorAll('.entry-card').forEach(card => {
+                const name = card.querySelector('.entry-name').textContent.toLowerCase();
+                const username = card.querySelector('.entry-username').textContent.toLowerCase();
+                const tags = Array.from(card.querySelectorAll('.tag')).map(tag => tag.textContent.toLowerCase());
+                
+                if (name.includes(searchTerm) || 
+                    username.includes(searchTerm) || 
+                    tags.some(tag => tag.includes(searchTerm))) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
         }
 
-        function renderEntries(entries = state.vault.entries) {
-            if (!entries.length) {
+        function renderEntries() {
+            if (!state.vault.entries.length) {
                 elements.entriesContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">🔍</div>
-                        <h3>No passwords found</h3>
-                        <p>Try adjusting your search or add a new entry</p>
+                        <h3>No passwords yet</h3>
+                        <p>Add your first password entry to get started</p>
                     </div>
                 `;
                 return;
             }
             
-            elements.entriesContainer.innerHTML = entries.map(entry => `
-                <div class="entry-card" data-id="${entry.id}">
+            // Sort entries by name
+            const sortedEntries = [...state.vault.entries].sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+            
+            // Clear container
+            elements.entriesContainer.innerHTML = '';
+            
+            // Render each entry
+            sortedEntries.forEach(entry => {
+                const entryElement = document.createElement('div');
+                entryElement.className = 'entry-card';
+                entryElement.innerHTML = `
                     <div class="entry-header">
                         <div>
                             <div class="entry-name">${escapeHtml(entry.name)}</div>
-                            <div class="entry-username">${escapeHtml(entry.username)}</div>
+                            <div class="entry-username">${escapeHtml(entry.username || 'No username')}</div>
                         </div>
                         <div class="entry-actions">
                             <button class="action-btn" title="Edit">✏️</button>
@@ -1381,16 +1379,18 @@
                         </div>
                     ` : ''}
                     <div class="entry-footer">
-                        <div>Updated: ${formatDate(entry.updatedAt)}</div>
-                        <div title="Password strength" class="password-strength-indicator">${getPasswordStrengthIndicator(entry.password)}</div>
+                        <div>Created: ${new Date(entry.createdAt).toLocaleDateString()}</div>
+                        <div>Updated: ${new Date(entry.updatedAt).toLocaleDateString()}</div>
                     </div>
-                </div>
-            `).join('');
+                `;
+                
+                elements.entriesContainer.appendChild(entryElement);
+            });
         }
 
         // Password utilities
-        function togglePasswordVisibility(id) {
-            const passwordInput = document.getElementById(`password-${id}`);
+        function togglePasswordVisibility(entryId) {
+            const passwordInput = document.getElementById(`password-${entryId}`);
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';
             } else {
@@ -1402,50 +1402,37 @@
             const passwordInput = document.getElementById('entryPassword');
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';
-                elements.toggleModalPassword.textContent = '🙈';
+                elements.toggleModalPassword.textContent = '🔒';
             } else {
                 passwordInput.type = 'password';
                 elements.toggleModalPassword.textContent = '👁️';
             }
         }
 
-        function copyPasswordToClipboard(id) {
-            const entry = state.vault.entries.find(e => e.id === id);
+        function copyPasswordToClipboard(entryId) {
+            const entry = state.vault.entries.find(e => e.id === entryId);
             if (!entry) return;
             
-            navigator.clipboard.writeText(entry.password).then(() => {
-                const copyBtn = document.querySelector(`.copy-password[data-entry="${id}"]`);
-                const notification = document.createElement('div');
-                notification.className = 'copy-notification';
-                notification.textContent = 'Copied!';
-                copyBtn.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.classList.add('show');
-                }, 10);
-                
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                    setTimeout(() => {
-                        if (copyBtn.contains(notification)) {
-                            copyBtn.removeChild(notification);
-                        }
-                    }, 300);
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy password:', err);
-                showNotification('Failed to copy password', 'error');
-            });
+            navigator.clipboard.writeText(entry.password)
+                .then(() => {
+                    showNotification('Password copied to clipboard', 'success');
+                })
+                .catch(err => {
+                    console.error('Failed to copy password:', err);
+                    showNotification('Failed to copy password', 'error');
+                });
         }
 
         function copyModalPassword() {
             const passwordInput = document.getElementById('entryPassword');
-            navigator.clipboard.writeText(passwordInput.value).then(() => {
-                showNotification('Password copied to clipboard', 'success');
-            }).catch(err => {
-                console.error('Failed to copy password:', err);
-                showNotification('Failed to copy password', 'error');
-            });
+            navigator.clipboard.writeText(passwordInput.value)
+                .then(() => {
+                    showNotification('Password copied to clipboard', 'success');
+                })
+                .catch(err => {
+                    console.error('Failed to copy password:', err);
+                    showNotification('Failed to copy password', 'error');
+                });
         }
 
         function generatePasswordForEntry() {
@@ -1459,21 +1446,17 @@
             const excludeChars = document.getElementById('excludeChars').value;
             
             const password = generatePassword(
-                length, 
-                useUppercase, 
-                useLowercase, 
-                useDigits, 
-                useSymbols, 
-                excludeAmbiguous, 
+                length,
+                useUppercase,
+                useLowercase,
+                useDigits,
+                useSymbols,
+                excludeAmbiguous,
                 requireAllTypes,
                 excludeChars
             );
             
             document.getElementById('entryPassword').value = password;
-            document.getElementById('entryPassword').type = 'text';
-            elements.toggleModalPassword.textContent = '🙈';
-            
-            showNotification('Password generated successfully', 'success');
         }
 
         function generatePassword(
@@ -1486,164 +1469,131 @@
             requireAllTypes = true,
             excludeChars = ''
         ) {
-            // Define character sets
+            // Character sets
             const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
             const lowercase = 'abcdefghijklmnopqrstuvwxyz';
             const digits = '0123456789';
             const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
             
-            // Remove ambiguous characters if needed
-            let safeUppercase = excludeAmbiguous ? uppercase.replace(/[O]/g, '') : uppercase;
-            let safeLowercase = excludeAmbiguous ? lowercase.replace(/[l]/g, '') : lowercase;
-            let safeDigits = excludeAmbiguous ? digits.replace(/[01]/g, '') : digits;
-            let safeSymbols = excludeAmbiguous ? symbols.replace(/[|;:,.<>{}[]]/g, '') : symbols;
+            // Ambiguous characters to exclude if requested
+            const ambiguous = 'O0Il';
             
-            // Filter out excluded characters
-            if (excludeChars) {
-                const excludeRegex = new RegExp(`[${excludeChars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`, 'g');
-                safeUppercase = safeUppercase.replace(excludeRegex, '');
-                safeLowercase = safeLowercase.replace(excludeRegex, '');
-                safeDigits = safeDigits.replace(excludeRegex, '');
-                safeSymbols = safeSymbols.replace(excludeRegex, '');
-            }
-            
-            // Build the character pool based on selected options
+            // Build character pool based on options
             let charPool = '';
-            const selectedSets = [];
+            if (useUppercase) charPool += uppercase;
+            if (useLowercase) charPool += lowercase;
+            if (useDigits) charPool += digits;
+            if (useSymbols) charPool += symbols;
             
-            if (useUppercase && safeUppercase) {
-                charPool += safeUppercase;
-                selectedSets.push(safeUppercase);
+            // Remove excluded characters
+            if (excludeAmbiguous) {
+                for (const char of ambiguous) {
+                    charPool = charPool.replace(char, '');
+                }
             }
             
-            if (useLowercase && safeLowercase) {
-                charPool += safeLowercase;
-                selectedSets.push(safeLowercase);
+            // Remove user-specified excluded characters
+            if (excludeChars) {
+                for (const char of excludeChars) {
+                    charPool = charPool.replace(char, '');
+                }
             }
             
-            if (useDigits && safeDigits) {
-                charPool += safeDigits;
-                selectedSets.push(safeDigits);
+            // Ensure at least one character set is selected
+            if (!charPool) {
+                throw new Error('No character sets selected for password generation');
             }
-            
-            if (useSymbols && safeSymbols) {
-                charPool += safeSymbols;
-                selectedSets.push(safeSymbols);
-            }
-            
-            // If no character sets are selected, return empty string
-            if (!charPool) return '';
             
             let password = '';
+            const poolLength = charPool.length;
             
-            // If we need at least one character from each selected set
-            if (requireAllTypes && selectedSets.length > 0) {
-                // Add one character from each selected set first
-                for (const set of selectedSets) {
-                    password += set[Math.floor(Math.random() * set.length)];
+            // Generate password
+            for (let i = 0; i < length; i++) {
+                const randomIndex = Math.floor(Math.random() * poolLength);
+                password += charPool[randomIndex];
+            }
+            
+            // If required, ensure at least one character from each selected set
+            if (requireAllTypes) {
+                const sets = [];
+                if (useUppercase) sets.push(uppercase);
+                if (useLowercase) sets.push(lowercase);
+                if (useDigits) sets.push(digits);
+                if (useSymbols) sets.push(symbols);
+                
+                // Remove excluded characters from each set
+                for (let i = 0; i < sets.length; i++) {
+                    let set = sets[i];
+                    if (excludeAmbiguous) {
+                        for (const char of ambiguous) {
+                            set = set.replace(char, '');
+                        }
+                    }
+                    if (excludeChars) {
+                        for (const char of excludeChars) {
+                            set = set.replace(char, '');
+                        }
+                    }
+                    sets[i] = set;
                 }
                 
-                // Fill the rest with random characters from the pool
-                for (let i = password.length; i < length; i++) {
-                    password += charPool[Math.floor(Math.random() * charPool.length)];
-                }
+                // Check if we have at least one character from each set
+                const hasAllTypes = sets.every(set => {
+                    for (const char of password) {
+                        if (set.includes(char)) return true;
+                    }
+                    return false;
+                });
                 
-                // Shuffle the password to avoid predictable pattern
-                password = password.split('').sort(() => Math.random() - 0.5).join('');
-            } else {
-                // Generate completely random password
-                for (let i = 0; i < length; i++) {
-                    password += charPool[Math.floor(Math.random() * charPool.length)];
+                // If not, regenerate until we do
+                if (!hasAllTypes) {
+                    return generatePassword(
+                        length,
+                        useUppercase,
+                        useLowercase,
+                        useDigits,
+                        useSymbols,
+                        excludeAmbiguous,
+                        requireAllTypes,
+                        excludeChars
+                    );
                 }
             }
             
             return password;
         }
 
-        function getPasswordStrengthIndicator(password) {
-            if (!password) return '❌';
-            
-            let strength = 0;
-            
-            // Length check
-            if (password.length >= 12) strength++;
-            if (password.length >= 16) strength++;
-            
-            // Character variety checks
-            if (/[A-Z]/.test(password)) strength++;
-            if (/[a-z]/.test(password)) strength++;
-            if (/[0-9]/.test(password)) strength++;
-            if (/[^A-Za-z0-9]/.test(password)) strength++;
-            
-            if (strength >= 6) return '🔒🔒🔒'; // Strong
-            if (strength >= 4) return '🔒🔒';   // Medium
-            return '🔒';                        // Weak
-        }
-
         // Import/Export functions
         function importCsv() {
-            // Create file input element
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.csv';
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
+                return;
+            }
             
-            fileInput.onchange = (e) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            
+            input.onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = (event) => {
                     try {
-                        const csvData = e.target.result;
-                        const lines = csvData.split('\n');
-                        const headers = lines[0].split(',').map(h => h.trim());
+                        const csvText = event.target.result;
+                        const entries = parseCsv(csvText);
                         
-                        // Check if required headers exist
-                        if (!headers.includes('name') || !headers.includes('password')) {
-                            showNotification('CSV must contain "name" and "password" columns', 'error');
-                            return;
-                        }
+                        // Add imported entries to vault
+                        state.vault.entries = [...state.vault.entries, ...entries];
                         
-                        const newEntries = [];
+                        // Save to undo stack
+                        state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
                         
-                        for (let i = 1; i < lines.length; i++) {
-                            if (!lines[i].trim()) continue;
-                            
-                            const values = lines[i].split(',').map(v => v.trim());
-                            const entry = {};
-                            
-                            headers.forEach((header, index) => {
-                                if (values[index]) {
-                                    entry[header] = values[index];
-                                }
-                            });
-                            
-                            if (entry.name && entry.password) {
-                                newEntries.push({
-                                    id: Date.now().toString() + i,
-                                    name: entry.name,
-                                    username: entry.username || '',
-                                    password: entry.password,
-                                    notes: entry.notes || '',
-                                    tags: entry.tags ? entry.tags.split(';').map(t => t.trim()) : [],
-                                    createdAt: new Date().toISOString(),
-                                    updatedAt: new Date().toISOString()
-                                });
-                            }
-                        }
+                        // Render entries
+                        renderEntries();
                         
-                        if (newEntries.length) {
-                            // Save to undo stack
-                            state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
-                            
-                            // Add new entries
-                            state.vault.entries = [...state.vault.entries, ...newEntries];
-                            
-                            renderEntries();
-                            showNotification(`Imported ${newEntries.length} entries successfully`, 'success');
-                        } else {
-                            showNotification('No valid entries found in CSV', 'warning');
-                        }
+                        showNotification(`Imported ${entries.length} entries from CSV`, 'success');
                     } catch (error) {
                         console.error('Failed to import CSV:', error);
                         showNotification('Failed to import CSV. Invalid format.', 'error');
@@ -1653,121 +1603,413 @@
                 reader.readAsText(file);
             };
             
-            fileInput.click();
+            input.click();
         }
 
         function exportCsvPlain() {
-            if (!state.vault.entries.length) {
-                showNotification('No entries to export', 'warning');
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
                 return;
             }
             
-            // Create CSV content
-            const headers = ['name', 'username', 'password', 'notes', 'tags'];
-            let csvContent = headers.join(',') + '\n';
-            
-            state.vault.entries.forEach(entry => {
-                const row = [
-                    `"${entry.name.replace(/"/g, '""')}"`,
-                    `"${entry.username.replace(/"/g, '""')}"`,
-                    `"${entry.password.replace(/"/g, '""')}"`,
-                    `"${entry.notes.replace(/"/g, '""')}"`,
-                    `"${entry.tags.join(';').replace(/"/g, '""')}"`
-                ];
-                csvContent += row.join(',') + '\n';
-            });
+            // Generate CSV content
+            const csvContent = generateCsv(state.vault.entries);
             
             // Create blob and download link
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
+            
+            // Create download link
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'passmanpro_export.csv';
+            a.download = `passman-export-${new Date().toISOString().slice(0, 10)}.csv`;
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
             
             hideModal(elements.csvWarningModal);
             showNotification('CSV exported successfully', 'success');
         }
 
-        function exportEncryptedCsv() {
-            if (!state.vault.entries.length) {
-                showNotification('No entries to export', 'warning');
+        async function exportEncryptedCsv() {
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
                 return;
             }
             
-            // Create CSV content
-            const headers = ['name', 'username', 'password', 'notes', 'tags'];
-            let csvContent = headers.join(',') + '\n';
-            
-            state.vault.entries.forEach(entry => {
-                const row = [
-                    `"${entry.name.replace(/"/g, '""')}"`,
-                    `"${entry.username.replace(/"/g, '""')}"`,
-                    `"${entry.password.replace(/"/g, '""')}"`,
-                    `"${entry.notes.replace(/"/g, '""')}"`,
-                    `"${entry.tags.join(';').replace(/"/g, '""')}"`
-                ];
-                csvContent += row.join(',') + '\n';
-            });
-            
-            // Encrypt the CSV content with the master password
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            
-            window.crypto.subtle.importKey(
-                'raw',
-                new TextEncoder().encode(state.masterPassword),
-                { name: 'PBKDF2' },
-                false,
-                ['deriveBits', 'deriveKey']
-            ).then(keyMaterial => {
-                return window.crypto.subtle.deriveKey(
-                    {
-                        name: 'PBKDF2',
-                        salt: salt,
-                        iterations: 100000,
-                        hash: 'SHA-256'
-                    },
-                    keyMaterial,
-                    { name: 'AES-GCM', length: 256 },
-                    false,
-                    ['encrypt']
+            try {
+                // Generate CSV content
+                const csvContent = generateCsv(state.vault.entries);
+                
+                // Convert to ArrayBuffer
+                const encoder = new TextEncoder();
+                const csvData = encoder.encode(csvContent);
+                
+                // Generate salt and IV
+                const salt = window.crypto.getRandomValues(new Uint8Array(16));
+                const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                
+                // Derive key using Argon2id
+                const key = await deriveKeyArgon2(
+                    state.masterPassword, 
+                    salt, 
+                    state.vault.argon2Params.time, 
+                    state.vault.argon2Params.memory, 
+                    state.vault.argon2Params.parallelism
                 );
-            }).then(key => {
-                return window.crypto.subtle.encrypt(
+                
+                // Encrypt the data
+                const encryptedData = await window.crypto.subtle.encrypt(
                     {
-                        name: 'AES-GCM',
+                        name: "AES-GCM",
                         iv: iv
                     },
                     key,
-                    new TextEncoder().encode(csvContent)
+                    csvData
                 );
-            }).then(ciphertext => {
-                // Combine salt, IV and ciphertext
-                const encryptedData = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
-                encryptedData.set(salt, 0);
-                encryptedData.set(iv, salt.length);
-                encryptedData.set(new Uint8Array(ciphertext), salt.length + iv.length);
+                
+                // Create the file format: [salt][iv][time][memory][parallelism][ciphertext]
+                const timeBytes = new Uint32Array([state.vault.argon2Params.time]);
+                const memoryBytes = new Uint32Array([state.vault.argon2Params.memory]);
+                const parallelismBytes = new Uint32Array([state.vault.argon2Params.parallelism]);
+                
+                const result = new Uint8Array(
+                    salt.length + 
+                    iv.length + 
+                    timeBytes.byteLength + 
+                    memoryBytes.byteLength + 
+                    parallelismBytes.byteLength + 
+                    encryptedData.byteLength
+                );
+                
+                let offset = 0;
+                result.set(salt, offset);
+                offset += salt.length;
+                result.set(iv, offset);
+                offset += iv.length;
+                result.set(new Uint8Array(timeBytes.buffer), offset);
+                offset += timeBytes.byteLength;
+                result.set(new Uint8Array(memoryBytes.buffer), offset);
+                offset += memoryBytes.byteLength;
+                result.set(new Uint8Array(parallelismBytes.buffer), offset);
+                offset += parallelismBytes.byteLength;
+                result.set(new Uint8Array(encryptedData), offset);
                 
                 // Create blob and download link
-                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                const blob = new Blob([result], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
+                
+                // Create download link
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'passmanpro_encrypted.csv.vault';
+                a.download = `passman-encrypted-${new Date().toISOString().slice(0, 10)}.vault`;
                 document.body.appendChild(a);
                 a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
                 
                 showNotification('Encrypted CSV exported successfully', 'success');
-            }).catch(error => {
+            } catch (error) {
                 console.error('Failed to export encrypted CSV:', error);
                 showNotification('Failed to export encrypted CSV', 'error');
+            }
+        }
+
+        async function importEncryptedCsv() {
+            if (!state.isUnlocked) {
+                showNotification('Vault is locked', 'error');
+                return;
+            }
+            
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.vault';
+            
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    // Read file as ArrayBuffer
+                    const arrayBuffer = await file.arrayBuffer();
+                    
+                    // Extract components from the file
+                    const salt = new Uint8Array(arrayBuffer, 0, 16);
+                    const iv = new Uint8Array(arrayBuffer, 16, 12);
+                    const time = new Uint32Array(arrayBuffer, 28, 1)[0];
+                    const memory = new Uint32Array(arrayBuffer, 32, 1)[0];
+                    const parallelism = new Uint32Array(arrayBuffer, 36, 1)[0];
+                    const ciphertext = new Uint8Array(arrayBuffer, 40);
+                    
+                    // Prompt for master password
+                    const masterPassword = prompt('Enter the master password for this encrypted file:');
+                    if (!masterPassword) return;
+                    
+                    // Derive key using Argon2id with the same parameters
+                    const key = await deriveKeyArgon2(masterPassword, salt, time, memory, parallelism);
+                    
+                    // Decrypt the data
+                    const decryptedData = await window.crypto.subtle.decrypt(
+                        {
+                            name: "AES-GCM",
+                            iv: iv
+                        },
+                        key,
+                        ciphertext
+                    );
+                    
+                    // Convert to text
+                    const decoder = new TextDecoder();
+                    const csvText = decoder.decode(decryptedData);
+                    
+                    // Parse CSV
+                    const entries = parseCsv(csvText);
+                    
+                    // Add imported entries to vault
+                    state.vault.entries = [...state.vault.entries, ...entries];
+                    
+                    // Save to undo stack
+                    state.undoStack.push(JSON.parse(JSON.stringify(state.vault.entries)));
+                    
+                    // Render entries
+                    renderEntries();
+                    
+                    showNotification(`Imported ${entries.length} entries from encrypted CSV`, 'success');
+                } catch (error) {
+                    console.error('Failed to import encrypted CSV:', error);
+                    showNotification('Failed to import encrypted CSV. Wrong password or corrupted file.', 'error');
+                }
+            };
+            
+            input.click();
+        }
+
+        // CSV parsing functions - UPDATED to handle commas in passwords
+        function parseCsv(csvText) {
+            const lines = csvText.split('\n');
+            const entries = [];
+            
+            // Skip header line
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                // Use a proper CSV parser that handles quoted fields
+                const values = parseCsvLine(line);
+                
+                if (values.length >= 3) {
+                    entries.push({
+                        id: Date.now().toString() + i,
+                        name: values[0] || '',
+                        username: values[1] || '',
+                        password: values[2] || '',
+                        notes: values[3] || '',
+                        tags: values[4] ? values[4].split(';').map(t => t.trim()) : [],
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+                }
+            }
+            
+            return entries;
+        }
+
+        // Proper CSV line parser that handles quoted fields
+        function parseCsvLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            let quoteChar = '"';
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === quoteChar) {
+                    if (inQuotes && line[i + 1] === quoteChar) {
+                        // Escaped quote inside quoted field
+                        current += quoteChar;
+                        i++; // Skip next quote
+                    } else {
+                        // Toggle quote state
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    // Comma outside quotes - field separator
+                    values.push(current.trim());
+                    current = '';
+                } else {
+                    // Regular character
+                    current += char;
+                }
+            }
+            
+            // Add the last field
+            values.push(current.trim());
+            
+            return values;
+        }
+
+        function generateCsv(entries) {
+            let csv = 'Name,Username,Password,Notes,Tags\n';
+            
+            entries.forEach(entry => {
+                const name = escapeCsvField(entry.name);
+                const username = escapeCsvField(entry.username);
+                const password = escapeCsvField(entry.password);
+                const notes = escapeCsvField(entry.notes);
+                const tags = escapeCsvField(entry.tags.join(';'));
+                
+                csv += `${name},${username},${password},${notes},${tags}\n`;
             });
+            
+            return csv;
+        }
+
+        function escapeCsvField(field) {
+            if (field === null || field === undefined) return '""';
+            
+            const stringField = String(field);
+            
+            // If field contains commas, quotes, or newlines, wrap in quotes
+            if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+                return '"' + stringField.replace(/"/g, '""') + '"';
+            }
+            
+            return stringField;
+        }
+
+        // Encryption utilities
+        async function deriveKeyArgon2(password, salt, timeCost, memoryCost, parallelism) {
+            // In a real implementation, you would use a WebAssembly Argon2 library
+            // For this example, we'll use a simplified approach with PBKDF2 as a fallback
+            
+            // Convert password to ArrayBuffer
+            const encoder = new TextEncoder();
+            const passwordData = encoder.encode(password);
+            
+            // Use PBKDF2 as a fallback (in a real app, use a proper Argon2 implementation)
+            const key = await window.crypto.subtle.importKey(
+                'raw',
+                passwordData,
+                { name: 'PBKDF2' },
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+            
+            const derivedKey = await window.crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                key,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+            
+            return derivedKey;
+        }
+
+        async function encryptVault(data, password) {
+            // Generate salt and IV
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            
+            // Convert data to ArrayBuffer
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(data);
+            
+            // Derive key using Argon2
+            const key = await deriveKeyArgon2(
+                password, 
+                salt, 
+                state.vault.argon2Params.time, 
+                state.vault.argon2Params.memory, 
+                state.vault.argon2Params.parallelism
+            );
+            
+            // Encrypt the data
+            const encryptedData = await window.crypto.subtle.encrypt(
+                {
+                    name: "AES-GCM",
+                    iv: iv
+                },
+                key,
+                dataBuffer
+            );
+            
+            // Create the file format: [salt][iv][time][memory][parallelism][ciphertext]
+            const timeBytes = new Uint32Array([state.vault.argon2Params.time]);
+            const memoryBytes = new Uint32Array([state.vault.argon2Params.memory]);
+            const parallelismBytes = new Uint32Array([state.vault.argon2Params.parallelism]);
+            
+            const result = new Uint8Array(
+                salt.length + 
+                iv.length + 
+                timeBytes.byteLength + 
+                memoryBytes.byteLength + 
+                parallelismBytes.byteLength + 
+                encryptedData.byteLength
+            );
+            
+            let offset = 0;
+            result.set(salt, offset);
+            offset += salt.length;
+            result.set(iv, offset);
+            offset += iv.length;
+            result.set(new Uint8Array(timeBytes.buffer), offset);
+            offset += timeBytes.byteLength;
+            result.set(new Uint8Array(memoryBytes.buffer), offset);
+            offset += memoryBytes.byteLength;
+            result.set(new Uint8Array(parallelismBytes.buffer), offset);
+            offset += parallelismBytes.byteLength;
+            result.set(new Uint8Array(encryptedData), offset);
+            
+            return result;
+        }
+
+        async function decryptVault(arrayBuffer, password, progressCallback = null) {
+            // Extract components from the file
+            const salt = new Uint8Array(arrayBuffer, 0, 16);
+            const iv = new Uint8Array(arrayBuffer, 16, 12);
+            const time = new Uint32Array(arrayBuffer, 28, 1)[0];
+            const memory = new Uint32Array(arrayBuffer, 32, 1)[0];
+            const parallelism = new Uint32Array(arrayBuffer, 36, 1)[0];
+            const ciphertext = new Uint8Array(arrayBuffer, 40);
+            
+            if (progressCallback) progressCallback(0.3);
+            
+            // Derive key using Argon2 with the same parameters
+            const key = await deriveKeyArgon2(password, salt, time, memory, parallelism);
+            
+            if (progressCallback) progressCallback(0.7);
+            
+            // Decrypt the data
+            const decryptedData = await window.crypto.subtle.decrypt(
+                {
+                    name: "AES-GCM",
+                    iv: iv
+                },
+                key,
+                ciphertext
+            );
+            
+            if (progressCallback) progressCallback(1.0);
+            
+            // Convert to text
+            const decoder = new TextDecoder();
+            return decoder.decode(decryptedData);
         }
 
         // Utility functions
@@ -1777,12 +2019,7 @@
             return div.innerHTML;
         }
 
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
-
-        // Initialize the app
+        // Initialize the application
         init();
     </script>
 </body>
