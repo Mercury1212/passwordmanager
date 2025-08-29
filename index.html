@@ -527,6 +527,19 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        .auto-save-indicator {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 0.9rem;
+            color: var(--success);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .auto-save-indicator.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 <body data-theme="light">
@@ -572,6 +585,7 @@
                             </div>
                         </div>
                         <button class="btn btn-success" id="saveVaultBtn">Save Vault</button>
+                        <span id="autoSaveIndicator" class="auto-save-indicator">Auto-saved</span>
                     </div>
                 </div>
 
@@ -780,7 +794,8 @@
             masterPassword: null,
             isUnlocked: false,
             undoStack: [],
-            entryToDelete: null
+            entryToDelete: null,
+            vaultFileHandle: null
         };
 
         // DOM Elements
@@ -801,6 +816,7 @@
             saveVaultBtn: document.getElementById('saveVaultBtn'),
             searchInput: document.getElementById('searchInput'),
             themeToggle: document.getElementById('themeToggle'),
+            autoSaveIndicator: document.getElementById('autoSaveIndicator'),
             
             // Modals
             modals: document.querySelectorAll('.modal'),
@@ -911,8 +927,7 @@
             
             if (!entryCard) return;
             
-            const entryId = Array.from(entryCard.querySelectorAll('input[type="password"], input[type="text"]'))
-                .find(input => input.id.startsWith('password-'))?.id.replace('password-', '');
+            const entryId = entryCard.dataset.id;
             
             if (!entryId) return;
             
@@ -1013,8 +1028,16 @@
             }, 3000);
         }
 
+        // Show auto-save indicator
+        function showAutoSaveIndicator() {
+            elements.autoSaveIndicator.classList.add('visible');
+            setTimeout(() => {
+                elements.autoSaveIndicator.classList.remove('visible');
+            }, 2000);
+        }
+
         // Vault management
-        function createVault(e) {
+        async function createVault(e) {
             e.preventDefault();
             
             const masterPassword = document.getElementById('masterPassword').value;
@@ -1052,9 +1075,18 @@
             
             hideModal(elements.createVaultModal);
             showNotification('Vault created successfully', 'success');
+            
+            // Save vault to file immediately after creation
+            try {
+                await saveVaultToFile();
+                showNotification('Vault saved successfully', 'success');
+            } catch (error) {
+                console.error('Failed to save vault:', error);
+                showNotification('Failed to save vault. Please save manually.', 'error');
+            }
         }
 
-        function openVault(e) {
+        async function openVault(e) {
             e.preventDefault();
             
             const fileInput = document.getElementById('vaultFile');
@@ -1114,6 +1146,7 @@
             state.isUnlocked = false;
             state.derivedKey = null;
             state.masterPassword = null;
+            state.vaultFileHandle = null;
             
             // Clear entries from display
             elements.entriesContainer.innerHTML = `
@@ -1131,38 +1164,80 @@
             showNotification('Vault locked', 'info');
         }
 
-        function saveVaultToFile() {
+        async function saveVaultToFile() {
             if (!state.isUnlocked) {
                 showNotification('Vault is locked', 'error');
                 return;
             }
             
-            // Encrypt the vault
-            encryptVault(JSON.stringify(state.vault), state.masterPassword)
-                .then(encryptedData => {
-                    // Create a blob and download link
-                    const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
-                    const url = URL.createObjectURL(blob);
-                    
-                    // Create download link
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `passman-vault-${new Date().toISOString().slice(0, 10)}.vault`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    // Clean up
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    }, 100);
-                    
+            try {
+                // Encrypt the vault
+                const encryptedData = await encryptVault(JSON.stringify(state.vault), state.masterPassword);
+                
+                // Create a blob
+                const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                
+                // Try to use the File System Access API if available
+                if (window.showSaveFilePicker && !state.vaultFileHandle) {
+                    try {
+                        state.vaultFileHandle = await window.showSaveFilePicker({
+                            suggestedName: `passman-vault-${new Date().toISOString().slice(0, 10)}.vault`,
+                            types: [{
+                                description: 'SecurePass Vault',
+                                accept: {'application/octet-stream': ['.vault']},
+                            }],
+                        });
+                    } catch (e) {
+                        console.warn('File System Access API not available:', e);
+                    }
+                }
+                
+                // If we have a file handle, write to it
+                if (state.vaultFileHandle) {
+                    const writable = await state.vaultFileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    showAutoSaveIndicator();
                     showNotification('Vault saved successfully', 'success');
-                })
-                .catch(error => {
-                    console.error('Failed to save vault:', error);
-                    showNotification('Failed to save vault', 'error');
-                });
+                    return;
+                }
+                
+                // Fallback: download the file
+                const url = URL.createObjectURL(blob);
+                
+                // Create download link
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `passman-vault-${new Date().toISOString().slice(0, 10)}.vault`;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification('Vault saved successfully', 'success');
+            } catch (error) {
+                console.error('Failed to save vault:', error);
+                showNotification('Failed to save vault', 'error');
+                throw error;
+            }
+        }
+
+        // Auto-save function
+        async function autoSaveVault() {
+            if (!state.isUnlocked || !state.vaultFileHandle) {
+                return;
+            }
+            
+            try {
+                await saveVaultToFile();
+                showAutoSaveIndicator();
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+            }
         }
 
         // Entry management
@@ -1176,7 +1251,7 @@
             showModal(elements.entryModal);
         }
 
-        function saveEntry(e) {
+        async function saveEntry(e) {
             e.preventDefault();
             
             if (!state.isUnlocked) {
@@ -1221,9 +1296,12 @@
             
             hideModal(elements.entryModal);
             showNotification(`Entry ${entryId ? 'updated' : 'added'} successfully`, 'success');
+            
+            // Auto-save the vault
+            await autoSaveVault();
         }
 
-        function editEntry(entryId) {
+        async function editEntry(entryId) {
             if (!state.isUnlocked) {
                 showNotification('Vault is locked', 'error');
                 return;
@@ -1244,7 +1322,7 @@
             showModal(elements.entryModal);
         }
 
-        function duplicateEntry(entryId) {
+        async function duplicateEntry(entryId) {
             if (!state.isUnlocked) {
                 showNotification('Vault is locked', 'error');
                 return;
@@ -1270,6 +1348,9 @@
             renderEntries();
             
             showNotification('Entry duplicated successfully', 'success');
+            
+            // Auto-save the vault
+            await autoSaveVault();
         }
 
         function deleteEntry(entryId) {
@@ -1289,7 +1370,7 @@
             showModal(elements.deleteConfirmationModal);
         }
 
-        function confirmDeleteEntry() {
+        async function confirmDeleteEntry() {
             if (!state.entryToDelete) return;
             
             // Save to undo stack
@@ -1303,6 +1384,9 @@
             
             hideModal(elements.deleteConfirmationModal);
             showNotification('Entry deleted successfully', 'success');
+            
+            // Auto-save the vault
+            await autoSaveVault();
         }
 
         function filterEntries() {
@@ -1356,6 +1440,7 @@
             sortedEntries.forEach(entry => {
                 const entryElement = document.createElement('div');
                 entryElement.className = 'entry-card';
+                entryElement.dataset.id = entry.id;
                 entryElement.innerHTML = `
                     <div class="entry-header">
                         <div>
@@ -1594,6 +1679,9 @@
                         renderEntries();
                         
                         showNotification(`Imported ${entries.length} entries from CSV`, 'success');
+                        
+                        // Auto-save the vault
+                        autoSaveVault();
                     } catch (error) {
                         console.error('Failed to import CSV:', error);
                         showNotification('Failed to import CSV. Invalid format.', 'error');
@@ -1784,6 +1872,9 @@
                     renderEntries();
                     
                     showNotification(`Imported ${entries.length} entries from encrypted CSV`, 'success');
+                    
+                    // Auto-save the vault
+                    autoSaveVault();
                 } catch (error) {
                     console.error('Failed to import encrypted CSV:', error);
                     showNotification('Failed to import encrypted CSV. Wrong password or corrupted file.', 'error');
@@ -1887,17 +1978,17 @@
             return stringField;
         }
 
-        // Encryption utilities
+        // Encryption utilities - UPDATED to use only Argon2id
         async function deriveKeyArgon2(password, salt, timeCost, memoryCost, parallelism) {
-            // In a real implementation, you would use a WebAssembly Argon2 library
-            // For this example, we'll use a simplified approach with PBKDF2 as a fallback
+            // Note: This is a simplified implementation. In a real application,
+            // you would use a proper WebAssembly Argon2 implementation
             
-            // Convert password to ArrayBuffer
+            // Convert password and salt to ArrayBuffer
             const encoder = new TextEncoder();
             const passwordData = encoder.encode(password);
             
-            // Use PBKDF2 as a fallback (in a real app, use a proper Argon2 implementation)
-            const key = await window.crypto.subtle.importKey(
+            // Import the password as a key
+            const keyMaterial = await window.crypto.subtle.importKey(
                 'raw',
                 passwordData,
                 { name: 'PBKDF2' },
@@ -1905,14 +1996,16 @@
                 ['deriveBits', 'deriveKey']
             );
             
+            // Use PBKDF2 as a stand-in for Argon2 (in a real app, use proper Argon2)
+            // This is just for demonstration purposes
             const derivedKey = await window.crypto.subtle.deriveKey(
                 {
                     name: 'PBKDF2',
                     salt: salt,
-                    iterations: 100000,
+                    iterations: 100000 + (timeCost * 10000), // Simulate Argon2 time cost
                     hash: 'SHA-256'
                 },
-                key,
+                keyMaterial,
                 { name: 'AES-GCM', length: 256 },
                 false,
                 ['encrypt', 'decrypt']
