@@ -541,6 +541,8 @@
             opacity: 1;
         }
     </style>
+    <!-- Add Argon2-browser script -->
+    <script src="https://unpkg.com/argon2-browser@1.18.0/dist/argon2-bundled.min.js"></script>
 </head>
 <body data-theme="light">
     <div class="container">
@@ -961,6 +963,11 @@
             
             if (typeof WebAssembly !== 'object' || !WebAssembly.instantiate) {
                 showNotification('WebAssembly is not supported in your browser. Argon2 will not work.', 'error');
+            }
+            
+            // Check if Argon2 is available
+            if (typeof argon2 === 'undefined') {
+                showNotification('Argon2 library failed to load. Please check your internet connection.', 'error');
             }
         }
 
@@ -1978,42 +1985,40 @@
             return stringField;
         }
 
-        // Encryption utilities - UPDATED to use only Argon2id
+        // UPDATED: Argon2id key derivation function
         async function deriveKeyArgon2(password, salt, timeCost, memoryCost, parallelism) {
-            // Note: This is a simplified implementation. In a real application,
-            // you would use a proper WebAssembly Argon2 implementation
-            
-            // Convert password and salt to ArrayBuffer
-            const encoder = new TextEncoder();
-            const passwordData = encoder.encode(password);
-            
-            // Import the password as a key
-            const keyMaterial = await window.crypto.subtle.importKey(
-                'raw',
-                passwordData,
-                { name: 'PBKDF2' },
-                false,
-                ['deriveBits', 'deriveKey']
-            );
-            
-            // Use PBKDF2 as a stand-in for Argon2 (in a real app, use proper Argon2)
-            // This is just for demonstration purposes
-            const derivedKey = await window.crypto.subtle.deriveKey(
-                {
-                    name: 'PBKDF2',
-                    salt: salt,
-                    iterations: 100000 + (timeCost * 10000), // Simulate Argon2 time cost
-                    hash: 'SHA-256'
-                },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt', 'decrypt']
-            );
-            
-            return derivedKey;
+            try {
+                // Convert salt to Uint8Array if it's not already
+                const saltUint8 = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
+                
+                // Hash the password using Argon2id
+                const result = await argon2.hash({
+                    pass: password,
+                    salt: saltUint8,
+                    time: timeCost,
+                    mem: memoryCost,
+                    parallelism: parallelism,
+                    hashLen: 32,
+                    type: argon2.ArgonType.Argon2id
+                });
+                
+                // Import the derived hash as a CryptoKey for AES
+                const key = await window.crypto.subtle.importKey(
+                    'raw',
+                    result.hash,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['encrypt', 'decrypt']
+                );
+                
+                return key;
+            } catch (error) {
+                console.error('Argon2 error:', error);
+                throw new Error('Failed to derive key with Argon2');
+            }
         }
 
+        // UPDATED: Encrypt vault function with proper Argon2id
         async function encryptVault(data, password) {
             // Generate salt and IV
             const salt = window.crypto.getRandomValues(new Uint8Array(16));
@@ -2023,7 +2028,7 @@
             const encoder = new TextEncoder();
             const dataBuffer = encoder.encode(data);
             
-            // Derive key using Argon2
+            // Derive key using Argon2id
             const key = await deriveKeyArgon2(
                 password, 
                 salt, 
@@ -2072,6 +2077,7 @@
             return result;
         }
 
+        // UPDATED: Decrypt vault function with proper Argon2id
         async function decryptVault(arrayBuffer, password, progressCallback = null) {
             // Extract components from the file
             const salt = new Uint8Array(arrayBuffer, 0, 16);
