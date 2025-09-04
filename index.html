@@ -1099,6 +1099,7 @@
                 navigator.clipboard.writeText(code)
                     .then(() => {
                         showNotification('TOTP code copied to clipboard', 'success');
+			setTimeout(() => navigator.clipboard.writeText(''), 30000);
                     })
                     .catch(err => {
                         console.error('Failed to copy TOTP code:', err);
@@ -1124,6 +1125,7 @@
                 navigator.clipboard.writeText(totpInput.value)
                     .then(() => {
                         showNotification('TOTP secret copied to clipboard', 'success');
+			setTimeout(() => navigator.clipboard.writeText(''), 30000);
                     })
                     .catch(err => {
                         console.error('Failed to copy TOTP secret:', err);
@@ -1156,16 +1158,15 @@
             elements.searchInput.addEventListener('input', filterEntries);
             elements.themeToggle.addEventListener('click', toggleTheme);
             
-			// Close Import/Export menu when clicking outside
-			document.addEventListener('click', (e) => {
-			    if (
-		     	   !elements.importExportBtn.contains(e.target) && 
-		      	  !elements.importExportMenu.contains(e.target)
-		  	  ) {
- 		    	   elements.importExportMenu.style.display = 'none';
- 			   }
-			});
-
+		// Close Import/Export menu when clicking outside
+document.addEventListener('click', (e) => {
+    if (
+        !elements.importExportBtn.contains(e.target) && 
+        !elements.importExportMenu.contains(e.target)
+    ) {
+        elements.importExportMenu.style.display = 'none';
+    }
+});
 
             // Password generation and settings
             elements.passwordSettingsBtn.addEventListener('click', togglePasswordSettings);
@@ -1735,10 +1736,17 @@ function handleEntryActionClick(e) {
                 const name = card.querySelector('.entry-name').textContent.toLowerCase();
                 const username = card.querySelector('.entry-username').textContent.toLowerCase();
                 const tags = Array.from(card.querySelectorAll('.tag')).map(tag => tag.textContent.toLowerCase());
-                
+                const url = card.querySelector('.entry-url a')?.textContent.toLowerCase() || '';
+		const email = card.querySelector('.entry-email a')?.textContent.toLowerCase() || '';
+		const notes = state.vault.entries.find(e => e.id === card.dataset.id)?.notes.toLowerCase() || '';
+
                 if (name.includes(searchTerm) || 
                     username.includes(searchTerm) || 
-                    tags.some(tag => tag.includes(searchTerm))) {
+                    tags.some(tag => tag.includes(searchTerm)) ||
+		url.includes(searchTerm) ||          // NEW
+		email.includes(searchTerm) ||        // NEW
+		notes.includes(searchTerm)           // NEW
+) {
                     card.style.display = 'block';
                 } else {
                     card.style.display = 'none';
@@ -1858,6 +1866,7 @@ ${entry.email ? `
             navigator.clipboard.writeText(entry.password)
                 .then(() => {
                     showNotification('Password copied to clipboard', 'success');
+		setTimeout(() => navigator.clipboard.writeText(''), 30000);
                 })
                 .catch(err => {
                     console.error('Failed to copy password:', err);
@@ -1870,6 +1879,7 @@ ${entry.email ? `
             navigator.clipboard.writeText(passwordInput.value)
                 .then(() => {
                     showNotification('Password copied to clipboard', 'success');
+		setTimeout(() => navigator.clipboard.writeText(''), 30000);
                 })
                 .catch(err => {
                     console.error('Failed to copy password:', err);
@@ -2024,24 +2034,8 @@ ${entry.email ? `
         reader.onload = (event) => {
             try {
                 const csvText = event.target.result;
-                
-                // === ADD DEBUG CODE HERE ===
-                console.log('Raw CSV:', csvText);
-                
                 const entries = parseCsv(csvText);
-                console.log('All parsed entries:', entries);
-                
-                // Check if specific fields are imported correctly
-                entries.forEach((entry, index) => {
-                    console.log(`Entry ${index}:`, {
-                        name: entry.name,
-                        url: entry.url,
-                        email: entry.email,
-                        notes: entry.notes,
-                        tags: entry.tags
-                    });
-                });
-                // === END DEBUG CODE ===
+
                 
                 // Add imported entries to vault
                 state.vault.entries = [...state.vault.entries, ...entries];
