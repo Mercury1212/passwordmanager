@@ -272,43 +272,74 @@
             transform: translateY(-5px);
         }
 
-        .entry-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
+        .entry-card {
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    border: 1px solid transparent;
+    position: relative; /* Required for absolute positioning */
+}
 
-        .entry-name {
-            font-weight: 600;
-            font-size: 1.25rem;
-            margin-bottom: 0.25rem;
-        }
+.entry-header {
+    display: block;
+    margin-bottom: 1rem;
+    padding-right: 90px; /* Reserve space for buttons */
+}
 
-        .entry-username {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
+.entry-name {
+    font-weight: 600;
+    font-size: 1.25rem;
+    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 0.25rem;
+    padding-right: 10px; /* Small padding */
+}
 
-        .entry-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
+.entry-username {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 10px; /* Small padding */
+}
 
-        .action-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 1rem;
-            padding: 0.25rem;
-        }
+.entry-actions {
+    display: flex;
+    gap: 0.5rem;
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: var(--bg-secondary); /* Match card background */
+    padding: 0.25rem;
+    border-radius: 4px;
+    z-index: 2; /* Ensure buttons are above content */
+}
 
-        .action-btn:hover {
-            color: var(--accent);
-            background-color: var(--bg-tertiary);
-            border-radius: 4px;
-        }
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    padding: 0.25rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-btn:hover {
+    color: var(--accent);
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+}
 
         .password-field {
             position: relative;
