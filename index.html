@@ -652,6 +652,40 @@
     color: var(--accent);
 }
 
+/* Entry Modal Scroll Fix - SINGLE SCROLLBAR */
+#entryModal .modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#entryModal form {
+    overflow-y: visible; /* Remove scrolling from form */
+    padding-right: 0.5rem;
+    flex: 1; /* Take available space */
+}
+
+/* Custom scrollbar for the modal content */
+#entryModal .modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+#entryModal .modal-content::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+#entryModal .modal-content::-webkit-scrollbar-thumb {
+    background: var(--gray);
+    border-radius: 3px;
+}
+
+/* Firefox scrollbar */
+#entryModal .modal-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gray) var(--bg-secondary);
+}
 
     </style>
     <!-- Add Argon2-browser script -->
