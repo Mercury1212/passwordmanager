@@ -1156,6 +1156,17 @@
             elements.searchInput.addEventListener('input', filterEntries);
             elements.themeToggle.addEventListener('click', toggleTheme);
             
+			// Close Import/Export menu when clicking outside
+			document.addEventListener('click', (e) => {
+			    if (
+		     	   !elements.importExportBtn.contains(e.target) && 
+		      	  !elements.importExportMenu.contains(e.target)
+		  	  ) {
+ 		    	   elements.importExportMenu.style.display = 'none';
+ 			   }
+			});
+
+
             // Password generation and settings
             elements.passwordSettingsBtn.addEventListener('click', togglePasswordSettings);
             elements.generatePasswordBtn.addEventListener('click', generatePasswordForEntry);
